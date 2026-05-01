@@ -1,0 +1,7 @@
+.env
+venv/
+__pycache__/
+faiss_index/
+*.pyc
+.DS_Store
+*.pkl

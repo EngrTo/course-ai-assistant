@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Course AI Assistant</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #333;
+        }
+
+        .container {
+            max-width: 720px;
+            margin: 30px auto;
+            padding: 0 16px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
+        .header h1 {
+            font-size: 24px;
+            color: #1a1a2e;
+        }
+
+        .header p {
+            font-size: 14px;
+            color: #666;
+            margin-top: 4px;
+        }
+
+        .chat-box {
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            height: 520px;
+            overflow-y: auto;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+
+        .message {
+            margin: 8px 0;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 82%;
+            line-height: 1.5;
+            font-size: 15px;
+            word-wrap: break-word;
+        }
+
+        .user {
+            background: #4f46e5;
+            color: white;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+
+        .bot {
+            background: #f3f4f6;
+            color: #1a1a2e;
+            border-bottom-left-radius: 4px;
+        }
+
+        .bot .sources {
+            margin-top: 8px;
+            padding-top: 8px;
+            border-top: 1px solid #ddd;
+            font-size: 12px;
+            color: #888;
+        }
+
+        .input-area {
+            display: flex;
+            gap: 10px;
+            margin-top: 16px;
+        }
+
+        #userInput {
+            flex: 1;
+            padding: 14px 18px;
+            border: 2px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 15px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        #userInput:focus {
+            border-color: #4f46e5;
+        }
+
+        #sendBtn {
+            padding: 14px 28px;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        #sendBtn:hover { background: #4338ca; }
+        #sendBtn:disabled { background: #a5b4fc; cursor: not-allowed; }
+
+        .typing-dots span {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            margin: 0 2px;
+            background: #999;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite both;
+        }
+        .typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        /* Flexbox for message alignment */
+        .chat-box { display: flex; flex-direction: column; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Course AI Assistant</h1>
+            <p>Ask me anything about the course materials</p>
+        </div>
+
+        <div class="chat-box" id="chatBox">
+            <div class="message bot">
+                Hi! I'm your AI course assistant. I've been trained on the course materials — ask me any question and I'll find the answer for you.
+            </div>
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="userInput"
+                   placeholder="Type your question..."
+                   autocomplete="off">
+            <button id="sendBtn" onclick="sendMessage()">Send</button>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chatBox');
+        const input = document.getElementById('userInput');
+        const sendBtn = document.getElementById('sendBtn');
+
+        // Send on Enter key
+        input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function addMessage(text, role, sources) {
+            const msg = document.createElement('div');
+            msg.className = `message ${role}`;
+
+            let html = escapeHtml(text).replace(/\n/g, '<br>');
+
+            if (sources && sources.length > 0) {
+                const sourceList = sources.map(s =>
+                    `📄 ${escapeHtml(s.source)}`
+                ).join(' &nbsp;');
+                html += `<div class="sources">Sources: ${sourceList}</div>`;
+            }
+
+            msg.innerHTML = html;
+            chatBox.appendChild(msg);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function showTyping() {
+            const typing = document.createElement('div');
+            typing.className = 'message bot';
+            typing.id = 'typing';
+            typing.innerHTML = '<div class="typing-dots"><span></span><span></span><span></span></div>';
+            chatBox.appendChild(typing);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function removeTyping() {
+            const el = document.getElementById('typing');
+            if (el) el.remove();
+        }
+
+        async function sendMessage() {
+            const question = input.value.trim();
+            if (!question) return;
+
+            // Show user message and clear input
+            addMessage(question, 'user');
+            input.value = '';
+            sendBtn.disabled = true;
+            showTyping();
+
+            try {
+                const res = await fetch('/ask', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question }),
+                });
+
+                removeTyping();
+
+                if (!res.ok) {
+                    addMessage('Sorry, something went wrong. Please try again.', 'bot');
+                    return;
+                }
+
+                const data = await res.json();
+
+                if (data.error) {
+                    addMessage(data.error, 'bot');
+                } else {
+                    addMessage(data.answer, 'bot', data.sources);
+                }
+            } catch (err) {
+                removeTyping();
+                addMessage('Connection error. Make sure the server is running.', 'bot');
+            } finally {
+                sendBtn.disabled = false;
+                input.focus();
+            }
+        }
+
+        // Auto-focus input on load
+        input.focus();
+    </script>
+</body>
+</html>
