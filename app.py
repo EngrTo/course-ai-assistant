@@ -51,6 +51,14 @@ def landing():
     return render_template("landing.html", subscribed_plan=subscribed_plan, portal_token=token or "")
 
 
+@app.route("/logout")
+def logout():
+    """Clear the subscription cookie."""
+    resp = make_response(redirect("/"))
+    resp.delete_cookie("portal_token")
+    return resp
+
+
 @app.route("/login", methods=["POST"])
 def login():
     """Log in by email — sets cookie if subscription found."""
@@ -146,6 +154,72 @@ def create_checkout():
     except Exception as e:
         print(f"Stripe error: {type(e).__name__}: {e}")
         return jsonify({"error": "Payment setup failed. Please try again."}), 500
+
+
+@app.route("/upgrade", methods=["POST"])
+def upgrade_plan():
+    """Upgrade an existing subscription to a higher plan."""
+    data = request.get_json()
+    new_plan = data.get("plan", "").strip()
+    token = request.cookies.get("portal_token")
+
+    if not token:
+        return jsonify({"error": "You must be logged in to upgrade."}), 401
+
+    client = get_client_by_token(token)
+    if not client:
+        return jsonify({"error": "Invalid session."}), 403
+
+    if not new_plan or new_plan not in PLAN_PRICES:
+        return jsonify({"error": "Invalid plan"}), 400
+
+    plan_order = {"starter": 1, "professional": 2, "enterprise": 3}
+    if plan_order.get(new_plan, 0) <= plan_order.get(client["plan"], 0):
+        return jsonify({"error": "You can only upgrade to a higher plan."}), 400
+
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "usd",
+                    "product_data": {
+                        "name": f"AI Assistant — {new_plan.title()} Plan (Upgrade)",
+                        "description": f"Upgrade from {client['plan'].title()} to {new_plan.title()}",
+                    },
+                    "unit_amount": PLAN_PRICES[new_plan],
+                    "recurring": {"interval": "month"},
+                },
+                "quantity": 1,
+            }],
+            mode="subscription",
+            success_url=request.url_root.replace("http://", "https://") + f"upgrade-success?plan={new_plan}&client_id={client['client_id']}",
+            cancel_url=request.url_root.replace("http://", "https://"),
+            customer_email=client["email"],
+            metadata={
+                "business_name": client["business_name"],
+                "plan": new_plan,
+                "upgrade_from": client["plan"],
+                "client_id": client["client_id"],
+            },
+        )
+        return jsonify({"url": session.url})
+    except Exception as e:
+        print(f"Upgrade error: {type(e).__name__}: {e}")
+        return jsonify({"error": "Upgrade failed. Please try again."}), 500
+
+
+@app.route("/upgrade-success")
+def upgrade_success():
+    """Handle successful plan upgrade."""
+    new_plan = request.args.get("plan")
+    client_id = request.args.get("client_id")
+
+    if client_id and new_plan:
+        update_client(client_id, {"plan": new_plan})
+        print(f"✓ Upgraded {client_id} to {new_plan}")
+
+    return redirect("/portal?token=" + (request.cookies.get("portal_token") or ""))
 
 
 @app.route("/payment-success")

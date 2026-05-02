@@ -182,6 +182,7 @@
         if (subscribedPlan) {
             const buttons = document.querySelectorAll('.plan-btn');
             const plans = ['starter', 'professional', 'enterprise'];
+            const planOrder = {'starter': 1, 'professional': 2, 'enterprise': 3};
             buttons.forEach((btn, i) => {
                 if (plans[i] === subscribedPlan) {
                     btn.textContent = '✓ Current Plan';
@@ -189,12 +190,17 @@
                     btn.style.opacity = '0.6';
                     btn.style.cursor = 'default';
                     btn.onclick = null;
+                } else if (planOrder[plans[i]] > planOrder[subscribedPlan]) {
+                    btn.textContent = 'Upgrade';
+                    btn.onclick = () => upgradePlan(plans[i]);
+                } else {
+                    btn.style.display = 'none';
                 }
             });
-            // Add a portal link banner at top
+            // Add a banner at top
             const banner = document.createElement('div');
             banner.style.cssText = 'background:#4f46e5;color:white;text-align:center;padding:12px;font-size:14px;';
-            banner.innerHTML = `You're subscribed to the <strong>${subscribedPlan.charAt(0).toUpperCase() + subscribedPlan.slice(1)}</strong> plan. <a href="/portal?token=${portalToken}" style="color:#fbbf24;margin-left:8px;">Go to Portal →</a>`;
+            banner.innerHTML = `You're subscribed to the <strong>${subscribedPlan.charAt(0).toUpperCase() + subscribedPlan.slice(1)}</strong> plan. <a href="/portal?token=${portalToken}" style="color:#fbbf24;margin-left:8px;">Go to Portal →</a> <a href="/logout" style="color:#fca5a5;margin-left:16px;font-size:12px;">Log out</a>`;
             document.body.insertBefore(banner, document.body.firstChild);
         }
 
@@ -248,6 +254,25 @@
             } catch (err) {
                 errEl.textContent = 'Connection error.';
                 errEl.style.display = 'block';
+            }
+        }
+
+        async function upgradePlan(plan) {
+            if (!confirm(`Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)} plan?`)) return;
+            try {
+                const res = await fetch('/upgrade', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ plan }),
+                });
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert(data.error || 'Upgrade failed.');
+                }
+            } catch (err) {
+                alert('Connection error. Please try again.');
             }
         }
     </script>
