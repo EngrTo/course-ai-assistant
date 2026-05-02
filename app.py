@@ -7,7 +7,7 @@ from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from agent import load_all_indexes, ask
 from ingest import ingest_all, ingest_client, get_client_dirs, INDEXES_DIR
-from database import create_client, get_client_by_token, get_client, update_client
+from database import create_client, get_client_by_token, get_client, update_client, get_client_by_email
 
 load_dotenv()
 
@@ -49,6 +49,27 @@ def landing():
         if client:
             subscribed_plan = client.get("plan")
     return render_template("landing.html", subscribed_plan=subscribed_plan, portal_token=token or "")
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    """Log in by email — sets cookie if subscription found."""
+    data = request.get_json()
+    email = data.get("email", "").strip() if data else ""
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    client = get_client_by_email(email)
+    if not client:
+        return jsonify({"error": "No subscription found for this email."}), 404
+
+    resp = make_response(jsonify({
+        "success": True,
+        "plan": client["plan"],
+        "portal_url": f"/portal?token={client['access_token']}"
+    }))
+    resp.set_cookie("portal_token", client["access_token"], max_age=365*24*3600, httponly=True, samesite="Lax")
+    return resp
 
 
 @app.route("/admin")

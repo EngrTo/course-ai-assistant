@@ -77,6 +77,15 @@ def get_client_by_token(token: str) -> dict | None:
     return None
 
 
+def get_client_by_email(email: str) -> dict | None:
+    """Look up a client by their email."""
+    db = _load_db()
+    for client in db.values():
+        if client.get("email", "").lower() == email.lower():
+            return client
+    return None
+
+
 def get_client(client_id: str) -> dict | None:
     """Get a client by ID."""
     db = _load_db()
