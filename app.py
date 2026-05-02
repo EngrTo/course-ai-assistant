@@ -87,8 +87,8 @@ def create_checkout():
                 "quantity": 1,
             }],
             mode="payment",
-            success_url=request.host_url + "payment-success?session_id={CHECKOUT_SESSION_ID}",
-            cancel_url=request.host_url,
+            success_url=request.url_root.replace("http://", "https://") + "payment-success?session_id={CHECKOUT_SESSION_ID}",
+            cancel_url=request.url_root.replace("http://", "https://"),
             customer_email=email,
             metadata={
                 "business_name": business_name,
@@ -105,28 +105,34 @@ def create_checkout():
 def payment_success():
     """Handle successful payment — provision the client."""
     session_id = request.args.get("session_id")
+    print(f"Payment success hit. session_id={session_id}")
+
     if not session_id:
-        return redirect("/")
+        return "No session ID provided. Please contact support.", 400
 
     try:
         session = stripe.checkout.Session.retrieve(session_id)
-        if session.payment_status != "paid":
-            return redirect("/")
+        print(f"Session status={session.status}, payment_status={session.payment_status}")
+
+        # Accept both 'paid' and 'no_payment_required', and check session status
+        if session.payment_status not in ("paid", "no_payment_required") and session.status != "complete":
+            return f"Payment not confirmed yet (status: {session.payment_status}). Please wait a moment and refresh.", 400
 
         # Check if client already created for this session
-        email = session.customer_email
+        email = session.customer_email or ""
         business_name = session.metadata.get("business_name", "Business")
         plan = session.metadata.get("plan", "starter")
 
         # Create client (idempotent — checks for existing)
         client = create_client(email, business_name, plan, session_id)
+        print(f"Client provisioned: {client['client_id']} for {email}")
 
         return render_template("success.html",
                                token=client["access_token"],
                                email=email)
     except Exception as e:
-        print(f"Payment success error: {e}")
-        return redirect("/")
+        print(f"Payment success error: {type(e).__name__}: {e}")
+        return f"Error processing payment: {type(e).__name__}. Please contact support with session: {session_id}", 500
 
 
 # ── Stripe Webhook (for production reliability) ──────────────
