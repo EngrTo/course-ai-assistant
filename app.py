@@ -68,6 +68,10 @@ def create_checkout():
     if not email:
         return jsonify({"error": "Email is required"}), 400
 
+    if not stripe.api_key:
+        print("ERROR: STRIPE_SECRET_KEY not set!")
+        return jsonify({"error": "Payment system not configured. Contact support."}), 500
+
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -93,7 +97,7 @@ def create_checkout():
         )
         return jsonify({"url": session.url})
     except Exception as e:
-        print(f"Stripe error: {e}")
+        print(f"Stripe error: {type(e).__name__}: {e}")
         return jsonify({"error": "Payment setup failed. Please try again."}), 500
 
 
