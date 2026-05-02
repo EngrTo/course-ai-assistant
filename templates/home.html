@@ -15,6 +15,11 @@
         .client-list a { text-decoration: none; color: #4f46e5; font-weight: 600; font-size: 18px; }
         .client-list a:hover { text-decoration: underline; }
         .client-list .url { font-size: 13px; color: #888; margin-top: 4px; }
+        .client-list .actions { margin-top: 8px; display: flex; gap: 8px; }
+        .client-list .actions a { font-size: 13px; color: white; background: #4f46e5; padding: 4px 12px; border-radius: 6px; text-decoration: none; }
+        .client-list .actions a:hover { background: #4338ca; }
+        .client-list .actions a.secondary { background: #6b7280; }
+        .client-list .actions a.secondary:hover { background: #4b5563; }
         .empty { color: #999; font-style: italic; }
     </style>
 </head>
@@ -29,6 +34,10 @@
             <li>
                 <a href="/{{ client }}">{{ client | replace('-', ' ') | title }}</a>
                 <div class="url">{{ request.host }}/{{ client }}</div>
+                <div class="actions">
+                    <a href="/{{ client }}">Open Chat</a>
+                    <a href="/{{ client }}/embed" class="secondary">Get Embed Code</a>
+                </div>
             </li>
             {% endfor %}
         </ul>

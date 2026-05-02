@@ -1,10 +1,12 @@
 """Flask web app — Multi-tenant AI Assistant powered by Groq."""
 import os
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, make_response
+from flask_cors import CORS
 from agent import load_all_indexes, ask
 from ingest import ingest_all, get_client_dirs, INDEXES_DIR
 
 app = Flask(__name__)
+CORS(app)
 
 # Build indexes at startup if not already present
 if not os.path.exists(INDEXES_DIR) or not os.listdir(INDEXES_DIR):
@@ -55,6 +57,14 @@ def ask_question(client_id):
     except Exception as e:
         print(f"Error [{client_id}]: {e}")
         return jsonify({"error": "Something went wrong. Please try again."}), 500
+
+
+@app.route("/<client_id>/embed")
+def embed_code(client_id):
+    """Show the embed code for a client's widget."""
+    if client_id not in indexes:
+        return jsonify({"error": f"Client '{client_id}' not found"}), 404
+    return render_template("embed.html", client_id=client_id)
 
 
 if __name__ == "__main__":
