@@ -1,4 +1,4 @@
-"""Ingest documents into a TF-IDF search index for RAG."""
+"""Ingest documents into TF-IDF search indexes for RAG (multi-tenant)."""
 import os
 import pickle
 import sys
@@ -7,8 +7,8 @@ from pypdf import PdfReader
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
-DOCS_DIR = "documents"
-INDEX_FILE = "search_index.pkl"
+CLIENTS_DIR = "clients"
+INDEXES_DIR = "indexes"
 
 
 def load_documents(docs_dir: str) -> list[dict]:
@@ -17,12 +17,12 @@ def load_documents(docs_dir: str) -> list[dict]:
 
     if not os.path.exists(docs_dir):
         print(f"Error: '{docs_dir}' directory not found.")
-        sys.exit(1)
+        return chunks
 
     files = [f for f in os.listdir(docs_dir) if f.endswith((".txt", ".pdf"))]
     if not files:
         print(f"No .txt or .pdf files found in '{docs_dir}/'")
-        sys.exit(1)
+        return chunks
 
     for filename in files:
         filepath = os.path.join(docs_dir, filename)
@@ -57,7 +57,7 @@ def load_documents(docs_dir: str) -> list[dict]:
     return chunks
 
 
-def build_index(chunks: list[dict], index_file: str = INDEX_FILE):
+def build_index(chunks: list[dict], index_file: str):
     """Build TF-IDF index from document chunks and save to disk."""
     texts = [chunk["text"] for chunk in chunks]
 
@@ -74,24 +74,56 @@ def build_index(chunks: list[dict], index_file: str = INDEX_FILE):
         "tfidf_matrix": tfidf_matrix,
     }
 
+    os.makedirs(os.path.dirname(index_file), exist_ok=True)
     with open(index_file, "wb") as f:
         pickle.dump(index, f)
 
     return index
 
 
-def ingest():
-    """Main ingestion pipeline."""
-    print("\n1. Loading documents...")
-    chunks = load_documents(DOCS_DIR)
-    print(f"   Loaded {len(chunks)} chunks\n")
+def get_client_dirs() -> list[str]:
+    """Get list of client directory names."""
+    if not os.path.exists(CLIENTS_DIR):
+        return []
+    return [d for d in os.listdir(CLIENTS_DIR)
+            if os.path.isdir(os.path.join(CLIENTS_DIR, d))]
 
-    print("2. Building search index...")
-    build_index(chunks)
-    print(f"   Index saved to '{INDEX_FILE}'\n")
 
-    print("Done! Run: python app.py")
+def ingest_client(client_id: str):
+    """Ingest documents for a single client."""
+    docs_dir = os.path.join(CLIENTS_DIR, client_id, "documents")
+    index_file = os.path.join(INDEXES_DIR, f"{client_id}.pkl")
+
+    print(f"\n--- Ingesting: {client_id} ---")
+    print(f"  Documents: {docs_dir}")
+
+    chunks = load_documents(docs_dir)
+    if not chunks:
+        print(f"  Skipping {client_id} — no documents found.")
+        return
+
+    print(f"  Loaded {len(chunks)} chunks")
+    build_index(chunks, index_file)
+    print(f"  Index saved: {index_file}")
+
+
+def ingest_all():
+    """Ingest documents for all clients."""
+    clients = get_client_dirs()
+    if not clients:
+        print(f"No client folders found in '{CLIENTS_DIR}/'")
+        print(f"Create folders like: {CLIENTS_DIR}/school/documents/")
+        sys.exit(1)
+
+    os.makedirs(INDEXES_DIR, exist_ok=True)
+
+    print(f"Found {len(clients)} client(s): {', '.join(clients)}")
+    for client_id in clients:
+        ingest_client(client_id)
+
+    print(f"\nDone! All indexes saved to '{INDEXES_DIR}/'")
+    print("Run: python app.py")
 
 
 if __name__ == "__main__":
-    ingest()
+    ingest_all()

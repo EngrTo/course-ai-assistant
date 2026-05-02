@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant — Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; padding: 40px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { margin-bottom: 8px; }
+        p { color: #666; margin-bottom: 24px; }
+        .client-list { list-style: none; }
+        .client-list li { background: white; border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .client-list a { text-decoration: none; color: #4f46e5; font-weight: 600; font-size: 18px; }
+        .client-list a:hover { text-decoration: underline; }
+        .client-list .url { font-size: 13px; color: #888; margin-top: 4px; }
+        .empty { color: #999; font-style: italic; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 AI Assistant Platform</h1>
+        <p>Active clients:</p>
+
+        {% if clients %}
+        <ul class="client-list">
+            {% for client in clients %}
+            <li>
+                <a href="/{{ client }}">{{ client | replace('-', ' ') | title }}</a>
+                <div class="url">{{ request.host }}/{{ client }}</div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty">No clients configured yet. Add client folders to clients/ directory.</p>
+        {% endif %}
+    </div>
+</body>
+</html>

@@ -1,4 +1,4 @@
-"""RAG Q&A agent using Groq (free) + TF-IDF retrieval."""
+"""RAG Q&A agent using Groq (free) + TF-IDF retrieval (multi-tenant)."""
 import os
 import pickle
 
@@ -9,20 +9,27 @@ from sklearn.metrics.pairwise import cosine_similarity
 
 load_dotenv()
 
-INDEX_FILE = "search_index.pkl"
+INDEXES_DIR = "indexes"
 
-# Conversation history (in-memory per session)
-conversation_history: list[dict] = []
+# Conversation history per client (in-memory)
+conversation_histories: dict[str, list[dict]] = {}
 
 
-def load_index(index_file: str = INDEX_FILE) -> dict:
-    """Load the pre-built search index."""
-    if not os.path.exists(index_file):
-        raise FileNotFoundError(
-            f"Search index not found. Run 'python ingest.py' first."
-        )
-    with open(index_file, "rb") as f:
-        return pickle.load(f)
+def load_all_indexes() -> dict[str, dict]:
+    """Load all client indexes at startup."""
+    indexes = {}
+    if not os.path.exists(INDEXES_DIR):
+        return indexes
+
+    for filename in os.listdir(INDEXES_DIR):
+        if filename.endswith(".pkl"):
+            client_id = filename[:-4]  # Remove .pkl
+            filepath = os.path.join(INDEXES_DIR, filename)
+            with open(filepath, "rb") as f:
+                indexes[client_id] = pickle.load(f)
+            print(f"  Loaded: {client_id} ({len(indexes[client_id]['chunks'])} chunks)")
+
+    return indexes
 
 
 def retrieve(query: str, index: dict, top_k: int = 4) -> list[dict]:
@@ -52,28 +59,49 @@ def retrieve(query: str, index: dict, top_k: int = 4) -> list[dict]:
     return results
 
 
-def ask(question: str, index: dict) -> dict:
+def get_client_config(client_id: str) -> dict:
+    """Load client-specific config (name, system prompt, etc.)."""
+    config_file = os.path.join("clients", client_id, "config.txt")
+    config = {
+        "name": client_id.replace("-", " ").title(),
+        "system_prompt": (
+            "You are a helpful AI assistant. Answer questions based on the "
+            "provided material. If the answer isn't in the material, say so. "
+            "Be concise and helpful."
+        ),
+    }
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            for line in f:
+                if "=" in line:
+                    key, value = line.strip().split("=", 1)
+                    config[key.strip()] = value.strip()
+    return config
+
+
+def ask(question: str, index: dict, client_id: str) -> dict:
     """Ask a question — retrieves context and gets LLM answer from Groq."""
     # Retrieve relevant chunks
     relevant_chunks = retrieve(question, index)
     context = "\n\n---\n\n".join(chunk["text"] for chunk in relevant_chunks)
 
-    # Build the prompt
-    system_prompt = (
-        "You are a helpful AI course assistant. Answer questions based on the "
-        "provided course material. If the answer isn't in the material, say so. "
-        "Be concise and helpful. Use the conversation history for context."
-    )
+    # Get client config
+    config = get_client_config(client_id)
 
-    # Include last 5 conversation exchanges for context
-    messages = [{"role": "system", "content": system_prompt}]
+    # Get or create conversation history for this client
+    if client_id not in conversation_histories:
+        conversation_histories[client_id] = []
+    history = conversation_histories[client_id]
+
+    # Build the prompt
+    messages = [{"role": "system", "content": config["system_prompt"]}]
 
     # Add conversation history (last 10 messages = 5 exchanges)
-    for msg in conversation_history[-10:]:
+    for msg in history[-10:]:
         messages.append(msg)
 
     # Add current question with retrieved context
-    user_message = f"""Based on this course material:
+    user_message = f"""Based on this material:
 
 {context}
 
@@ -93,8 +121,8 @@ Question: {question}"""
     answer = response.choices[0].message.content
 
     # Save to conversation history
-    conversation_history.append({"role": "user", "content": question})
-    conversation_history.append({"role": "assistant", "content": answer})
+    history.append({"role": "user", "content": question})
+    history.append({"role": "assistant", "content": answer})
 
     # Return answer with sources
     sources = [{"source": c["source"], "score": round(c["score"], 3)} for c in relevant_chunks]
