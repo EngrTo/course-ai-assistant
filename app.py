@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 from agent import load_all_indexes, ask
 from ingest import ingest_all, ingest_client, get_client_dirs, INDEXES_DIR
 from database import (
-    create_client, get_client_by_token, get_client, update_client,
+    init_db, create_client, get_client_by_token, get_client, update_client,
     get_client_by_email, set_client_password, verify_client_password,
     init_super_admin, verify_admin, get_admin, get_all_admins, get_all_clients,
     create_admin, delete_admin, set_reset_token, verify_reset_token, reset_password,
@@ -22,7 +22,8 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 CORS(app)
 
-# Initialize super admin on first run
+# Initialize database tables and super admin
+init_db()
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "toskicve@gmail.com")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123456")
 init_super_admin(ADMIN_EMAIL, ADMIN_PASSWORD)

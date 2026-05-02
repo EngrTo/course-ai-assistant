@@ -1,278 +1,413 @@
-"""JSON-based database for clients and admins with password auth."""
-import json
+"""Database for clients and admins — PostgreSQL on Render, SQLite locally."""
 import os
+import json
 import secrets
+import sqlite3
 from datetime import datetime
 from werkzeug.security import generate_password_hash, check_password_hash
 
-DB_FILE = "clients_db.json"
-ADMIN_DB_FILE = "admins_db.json"
+DATABASE_URL = os.getenv("DATABASE_URL")
+USE_PG = bool(DATABASE_URL and DATABASE_URL.startswith("postgres"))
+
+if USE_PG:
+    import psycopg2
+    from psycopg2.extras import RealDictCursor
+
+SQLITE_PATH = "app_database.db"
+
+# Placeholder: %s for PostgreSQL, ? for SQLite
+P = "%s" if USE_PG else "?"
+
+
+def _get_conn():
+    if USE_PG:
+        return psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
+    conn = sqlite3.connect(SQLITE_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _row(row):
+    """Convert a row to dict, parsing permissions JSON for SQLite."""
+    if row is None:
+        return None
+    d = dict(row)
+    # SQLite stores permissions as JSON string
+    if not USE_PG and "permissions" in d and isinstance(d["permissions"], str):
+        try:
+            d["permissions"] = json.loads(d["permissions"])
+        except (json.JSONDecodeError, TypeError):
+            d["permissions"] = []
+    # SQLite stores documents_uploaded as 0/1
+    if "documents_uploaded" in d:
+        d["documents_uploaded"] = bool(d["documents_uploaded"])
+    return d
+
+
+def _encode_perms(permissions: list) -> any:
+    """Encode permissions for storage."""
+    if USE_PG:
+        return permissions
+    return json.dumps(permissions)
+
+
+def init_db():
+    """Create tables if they don't exist."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    if USE_PG:
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS clients (
+                client_id TEXT PRIMARY KEY,
+                email TEXT NOT NULL,
+                business_name TEXT NOT NULL,
+                plan TEXT NOT NULL DEFAULT 'starter',
+                access_token TEXT,
+                password_hash TEXT,
+                stripe_session_id TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT,
+                documents_uploaded BOOLEAN DEFAULT FALSE,
+                reset_token TEXT,
+                reset_expires FLOAT
+            );
+            CREATE TABLE IF NOT EXISTS admins (
+                email TEXT PRIMARY KEY,
+                password_hash TEXT NOT NULL,
+                role TEXT DEFAULT 'admin',
+                permissions TEXT[],
+                created_by TEXT,
+                created_at TEXT,
+                reset_token TEXT,
+                reset_expires FLOAT
+            );
+        """)
+    else:
+        cur.execute("""CREATE TABLE IF NOT EXISTS clients (
+            client_id TEXT PRIMARY KEY,
+            email TEXT NOT NULL,
+            business_name TEXT NOT NULL,
+            plan TEXT NOT NULL DEFAULT 'starter',
+            access_token TEXT,
+            password_hash TEXT,
+            stripe_session_id TEXT,
+            status TEXT DEFAULT 'active',
+            created_at TEXT,
+            documents_uploaded INTEGER DEFAULT 0,
+            reset_token TEXT,
+            reset_expires REAL
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS admins (
+            email TEXT PRIMARY KEY,
+            password_hash TEXT NOT NULL,
+            role TEXT DEFAULT 'admin',
+            permissions TEXT,
+            created_by TEXT,
+            created_at TEXT,
+            reset_token TEXT,
+            reset_expires REAL
+        )""")
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 # ── Client Database ──────────────────────────────────────────
 
-def _load_db() -> dict:
-    if os.path.exists(DB_FILE):
-        with open(DB_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-
-def _save_db(db: dict):
-    with open(DB_FILE, "w") as f:
-        json.dump(db, f, indent=2)
-
-
 def create_client(email: str, business_name: str, plan: str, stripe_session_id: str) -> dict:
     """Create a new client after successful payment."""
-    db = _load_db()
+    conn = _get_conn()
+    cur = conn.cursor()
 
-    # Generate a URL-safe client ID from business name
     client_id = business_name.lower().strip()
     client_id = "".join(c if c.isalnum() else "-" for c in client_id)
     client_id = "-".join(part for part in client_id.split("-") if part)
 
-    # Handle duplicate IDs
     base_id = client_id
     counter = 1
-    while client_id in db:
+    while True:
+        cur.execute(f"SELECT 1 FROM clients WHERE client_id = {P}", (client_id,))
+        if not cur.fetchone():
+            break
         client_id = f"{base_id}-{counter}"
         counter += 1
 
-    # Generate access token for the client portal
     access_token = secrets.token_urlsafe(32)
+    now = datetime.now().isoformat()
 
-    client = {
-        "client_id": client_id,
-        "email": email,
-        "business_name": business_name,
-        "plan": plan,
-        "access_token": access_token,
-        "password_hash": None,  # Set when client creates password
-        "stripe_session_id": stripe_session_id,
-        "status": "active",
-        "created_at": datetime.now().isoformat(),
-        "documents_uploaded": False,
-    }
-
-    db[client_id] = client
-    _save_db(db)
+    cur.execute(f"""
+        INSERT INTO clients (client_id, email, business_name, plan, access_token, password_hash, stripe_session_id, status, created_at, documents_uploaded)
+        VALUES ({P}, {P}, {P}, {P}, {P}, {P}, {P}, {P}, {P}, {P})
+    """, (client_id, email, business_name, plan, access_token, None, stripe_session_id, "active", now, False if USE_PG else 0))
+    conn.commit()
+    cur.close()
+    conn.close()
 
     # Create client folders
     docs_dir = os.path.join("clients", client_id, "documents")
     os.makedirs(docs_dir, exist_ok=True)
 
-    # Create default config
     config_path = os.path.join("clients", client_id, "config.txt")
-    with open(config_path, "w") as f:
-        f.write(f"name={business_name} AI Assistant\n")
-        f.write(f"system_prompt=You are a helpful AI assistant for {business_name}. "
-                f"Answer questions based on the provided material. If the answer "
-                f"isn't in the material, say so. Be concise and helpful.\n")
+    if not os.path.exists(config_path):
+        with open(config_path, "w") as f:
+            f.write(f"name={business_name} AI Assistant\n")
+            f.write(f"system_prompt=You are a helpful AI assistant for {business_name}. "
+                    f"Answer questions based on the provided material. If the answer "
+                    f"isn't in the material, say so. Be concise and helpful.\n")
 
-    return client
+    return {
+        "client_id": client_id,
+        "email": email,
+        "business_name": business_name,
+        "plan": plan,
+        "access_token": access_token,
+        "password_hash": None,
+        "stripe_session_id": stripe_session_id,
+        "status": "active",
+        "created_at": now,
+        "documents_uploaded": False,
+    }
 
 
 def set_client_password(email: str, password: str) -> bool:
-    """Set/update a client's password."""
-    db = _load_db()
-    for client in db.values():
-        if client.get("email", "").lower() == email.lower():
-            client["password_hash"] = generate_password_hash(password)
-            _save_db(db)
-            return True
-    return False
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE clients SET password_hash = {P} WHERE LOWER(email) = LOWER({P})",
+                (generate_password_hash(password), email))
+    updated = cur.rowcount > 0
+    conn.commit()
+    cur.close()
+    conn.close()
+    return updated
 
 
 def verify_client_password(email: str, password: str) -> dict | None:
-    """Verify client credentials. Returns client dict or None."""
-    db = _load_db()
-    for client in db.values():
-        if client.get("email", "").lower() == email.lower():
-            if client.get("password_hash") and check_password_hash(client["password_hash"], password):
-                return client
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM clients WHERE LOWER(email) = LOWER({P})", (email,))
+    client = cur.fetchone()
+    cur.close()
+    conn.close()
+    client = _row(client)
+    if client and client.get("password_hash") and check_password_hash(client["password_hash"], password):
+        return client
     return None
 
 
 def get_client_by_token(token: str) -> dict | None:
-    """Look up a client by their access token."""
-    db = _load_db()
-    for client in db.values():
-        if client.get("access_token") == token:
-            return client
-    return None
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM clients WHERE access_token = {P}", (token,))
+    client = cur.fetchone()
+    cur.close()
+    conn.close()
+    return _row(client)
 
 
 def get_client_by_email(email: str) -> dict | None:
-    """Look up a client by their email."""
-    db = _load_db()
-    for client in db.values():
-        if client.get("email", "").lower() == email.lower():
-            return client
-    return None
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM clients WHERE LOWER(email) = LOWER({P})", (email,))
+    client = cur.fetchone()
+    cur.close()
+    conn.close()
+    return _row(client)
 
 
 def get_client(client_id: str) -> dict | None:
-    """Get a client by ID."""
-    db = _load_db()
-    return db.get(client_id)
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM clients WHERE client_id = {P}", (client_id,))
+    client = cur.fetchone()
+    cur.close()
+    conn.close()
+    return _row(client)
 
 
 def update_client(client_id: str, updates: dict):
-    """Update client fields."""
-    db = _load_db()
-    if client_id in db:
-        db[client_id].update(updates)
-        _save_db(db)
+    if not updates:
+        return
+    conn = _get_conn()
+    cur = conn.cursor()
+    set_clause = ", ".join(f"{k} = {P}" for k in updates.keys())
+    values = list(updates.values()) + [client_id]
+    cur.execute(f"UPDATE clients SET {set_clause} WHERE client_id = {P}", values)
+    conn.commit()
+    cur.close()
+    conn.close()
 
 
 def get_all_clients() -> dict:
-    """Get all clients."""
-    return _load_db()
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM clients ORDER BY created_at DESC")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return {_row(r)["client_id"]: _row(r) for r in rows}
 
+
+# ── Reset Token Functions ────────────────────────────────────
 
 def set_reset_token(email: str) -> str | None:
-    """Generate a password reset token (valid 1 hour). Works for clients and admins."""
-    import secrets as _secrets
-    token = _secrets.token_urlsafe(32)
-    expires = (datetime.now().timestamp()) + 3600  # 1 hour
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now().timestamp() + 3600
 
-    # Try client
-    db = _load_db()
-    for client in db.values():
-        if client.get("email", "").lower() == email.lower():
-            client["reset_token"] = token
-            client["reset_expires"] = expires
-            _save_db(db)
-            return token
+    conn = _get_conn()
+    cur = conn.cursor()
 
-    # Try admin
-    admin_db = _load_admin_db()
-    admin = admin_db.get(email.lower())
-    if admin:
-        admin["reset_token"] = token
-        admin["reset_expires"] = expires
-        _save_admin_db(admin_db)
+    cur.execute(f"UPDATE clients SET reset_token = {P}, reset_expires = {P} WHERE LOWER(email) = LOWER({P})",
+                (token, expires, email))
+    if cur.rowcount > 0:
+        conn.commit()
+        cur.close()
+        conn.close()
         return token
 
+    cur.execute(f"UPDATE admins SET reset_token = {P}, reset_expires = {P} WHERE LOWER(email) = LOWER({P})",
+                (token, expires, email))
+    if cur.rowcount > 0:
+        conn.commit()
+        cur.close()
+        conn.close()
+        return token
+
+    conn.commit()
+    cur.close()
+    conn.close()
     return None
 
 
 def verify_reset_token(token: str) -> dict | None:
-    """Verify a reset token. Returns {email, type} or None if invalid/expired."""
     now = datetime.now().timestamp()
+    conn = _get_conn()
+    cur = conn.cursor()
 
-    db = _load_db()
-    for client in db.values():
-        if client.get("reset_token") == token and client.get("reset_expires", 0) > now:
-            return {"email": client["email"], "type": "client"}
+    cur.execute(f"SELECT email FROM clients WHERE reset_token = {P} AND reset_expires > {P}", (token, now))
+    row = cur.fetchone()
+    if row:
+        cur.close()
+        conn.close()
+        return {"email": dict(row)["email"], "type": "client"}
 
-    admin_db = _load_admin_db()
-    for admin in admin_db.values():
-        if admin.get("reset_token") == token and admin.get("reset_expires", 0) > now:
-            return {"email": admin["email"], "type": "admin"}
+    cur.execute(f"SELECT email FROM admins WHERE reset_token = {P} AND reset_expires > {P}", (token, now))
+    row = cur.fetchone()
+    if row:
+        cur.close()
+        conn.close()
+        return {"email": dict(row)["email"], "type": "admin"}
 
+    cur.close()
+    conn.close()
     return None
 
 
 def reset_password(email: str, new_password: str) -> bool:
-    """Reset password for a client or admin and clear the token."""
-    # Try client
-    db = _load_db()
-    for client in db.values():
-        if client.get("email", "").lower() == email.lower():
-            client["password_hash"] = generate_password_hash(new_password)
-            client.pop("reset_token", None)
-            client.pop("reset_expires", None)
-            _save_db(db)
-            return True
+    hashed = generate_password_hash(new_password)
+    conn = _get_conn()
+    cur = conn.cursor()
 
-    # Try admin
-    admin_db = _load_admin_db()
-    admin = admin_db.get(email.lower())
-    if admin:
-        admin["password_hash"] = generate_password_hash(new_password)
-        admin.pop("reset_token", None)
-        admin.pop("reset_expires", None)
-        _save_admin_db(admin_db)
+    cur.execute(f"UPDATE clients SET password_hash = {P}, reset_token = NULL, reset_expires = NULL WHERE LOWER(email) = LOWER({P})",
+                (hashed, email))
+    if cur.rowcount > 0:
+        conn.commit()
+        cur.close()
+        conn.close()
         return True
 
+    cur.execute(f"UPDATE admins SET password_hash = {P}, reset_token = NULL, reset_expires = NULL WHERE LOWER(email) = LOWER({P})",
+                (hashed, email))
+    if cur.rowcount > 0:
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+
+    conn.commit()
+    cur.close()
+    conn.close()
     return False
 
 
 # ── Admin Database ───────────────────────────────────────────
 
-def _load_admin_db() -> dict:
-    if os.path.exists(ADMIN_DB_FILE):
-        with open(ADMIN_DB_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-
-def _save_admin_db(db: dict):
-    with open(ADMIN_DB_FILE, "w") as f:
-        json.dump(db, f, indent=2)
-
-
 def init_super_admin(email: str, password: str):
-    """Initialize the super admin if no admins exist."""
-    db = _load_admin_db()
-    if not db:
-        db[email.lower()] = {
-            "email": email,
-            "password_hash": generate_password_hash(password),
-            "role": "super_admin",
-            "permissions": ["manage_admins", "view_clients", "manage_clients", "view_analytics"],
-            "created_at": datetime.now().isoformat(),
-        }
-        _save_admin_db(db)
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) as cnt FROM admins")
+    row = cur.fetchone()
+    count = dict(row)["cnt"]
+    if count == 0:
+        perms = _encode_perms(["manage_admins", "view_clients", "manage_clients", "view_analytics"])
+        cur.execute(f"""
+            INSERT INTO admins (email, password_hash, role, permissions, created_at)
+            VALUES (LOWER({P}), {P}, 'super_admin', {P}, {P})
+        """, (email, generate_password_hash(password), perms, datetime.now().isoformat()))
+        conn.commit()
+    cur.close()
+    conn.close()
 
 
 def create_admin(email: str, password: str, permissions: list, created_by: str) -> dict | None:
-    """Create a new admin. Returns admin dict or None if exists."""
-    db = _load_admin_db()
-    if email.lower() in db:
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT 1 FROM admins WHERE email = LOWER({P})", (email,))
+    if cur.fetchone():
+        cur.close()
+        conn.close()
         return None
 
-    admin = {
-        "email": email,
-        "password_hash": generate_password_hash(password),
-        "role": "admin",
-        "permissions": permissions,
-        "created_by": created_by,
-        "created_at": datetime.now().isoformat(),
-    }
-    db[email.lower()] = admin
-    _save_admin_db(db)
-    return admin
+    perms = _encode_perms(permissions)
+    now = datetime.now().isoformat()
+    cur.execute(f"""
+        INSERT INTO admins (email, password_hash, role, permissions, created_by, created_at)
+        VALUES (LOWER({P}), {P}, 'admin', {P}, {P}, {P})
+    """, (email, generate_password_hash(password), perms, created_by, now))
+    conn.commit()
+    cur.close()
+    conn.close()
+    return {"email": email.lower(), "role": "admin", "permissions": permissions, "created_by": created_by, "created_at": now}
 
 
 def verify_admin(email: str, password: str) -> dict | None:
-    """Verify admin credentials. Returns admin dict or None."""
-    db = _load_admin_db()
-    admin = db.get(email.lower())
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM admins WHERE email = LOWER({P})", (email,))
+    admin = cur.fetchone()
+    cur.close()
+    conn.close()
+    admin = _row(admin)
     if admin and check_password_hash(admin["password_hash"], password):
         return admin
     return None
 
 
 def get_admin(email: str) -> dict | None:
-    """Get admin by email."""
-    db = _load_admin_db()
-    return db.get(email.lower())
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM admins WHERE email = LOWER({P})", (email,))
+    admin = cur.fetchone()
+    cur.close()
+    conn.close()
+    return _row(admin)
 
 
 def get_all_admins() -> dict:
-    """Get all admins."""
-    return _load_admin_db()
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM admins ORDER BY created_at")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return {_row(r)["email"]: _row(r) for r in rows}
 
 
 def delete_admin(email: str) -> bool:
-    """Delete an admin (cannot delete super_admin)."""
-    db = _load_admin_db()
-    admin = db.get(email.lower())
-    if admin and admin["role"] != "super_admin":
-        del db[email.lower()]
-        _save_admin_db(db)
-        return True
-    return False
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"DELETE FROM admins WHERE email = LOWER({P}) AND role != 'super_admin'", (email,))
+    deleted = cur.rowcount > 0
+    conn.commit()
+    cur.close()
+    conn.close()
+    return deleted

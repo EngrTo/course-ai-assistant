@@ -7,3 +7,7 @@ faiss_index/
 indexes/
 clients_db.json
 admins_db.json
+app_database.db
+test_db.py
+database_backup.py
+database_json_backup.py
