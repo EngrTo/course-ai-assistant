@@ -79,6 +79,13 @@ def admin():
     return render_template("home.html", clients=clients)
 
 
+@app.route("/admin/db")
+def admin_db():
+    """View the clients database (admin only)."""
+    from database import get_all_clients
+    return jsonify(get_all_clients())
+
+
 # ── Stripe Checkout ───────────────────────────────────────────
 
 @app.route("/checkout", methods=["POST"])
