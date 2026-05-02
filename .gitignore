@@ -5,3 +5,4 @@ faiss_index/
 *.pyc
 .DS_Store
 indexes/
+clients_db.json

@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant for Your Business</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #333; }
+
+        .hero {
+            background: linear-gradient(135deg, #1a1a2e 0%, #4f46e5 100%);
+            color: white;
+            padding: 80px 20px;
+            text-align: center;
+        }
+        .hero h1 { font-size: 42px; margin-bottom: 16px; }
+        .hero p { font-size: 20px; color: #c7d2fe; max-width: 600px; margin: 0 auto; }
+
+        .pricing { padding: 60px 20px; background: #f8fafc; }
+        .pricing h2 { text-align: center; font-size: 32px; margin-bottom: 40px; }
+        .pricing-grid { display: flex; gap: 24px; max-width: 900px; margin: 0 auto; flex-wrap: wrap; justify-content: center; }
+
+        .plan {
+            background: white;
+            border-radius: 16px;
+            padding: 32px 28px;
+            width: 280px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+            text-align: center;
+            position: relative;
+        }
+        .plan.popular { border: 2px solid #4f46e5; }
+        .plan.popular::after {
+            content: "MOST POPULAR";
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #4f46e5;
+            color: white;
+            padding: 4px 16px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 700;
+        }
+
+        .plan h3 { font-size: 22px; margin-bottom: 8px; }
+        .plan .price { font-size: 36px; font-weight: 700; color: #4f46e5; margin: 16px 0; }
+        .plan .price span { font-size: 16px; color: #888; font-weight: 400; }
+        .plan .period { font-size: 14px; color: #888; margin-top: -8px; margin-bottom: 16px; }
+        .plan ul { list-style: none; text-align: left; margin: 20px 0; }
+        .plan ul li { padding: 6px 0; font-size: 14px; color: #555; }
+        .plan ul li::before { content: "✓ "; color: #4f46e5; font-weight: 700; }
+
+        .plan-btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: #4f46e5;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .plan-btn:hover { background: #4338ca; }
+        .plan-btn.outline { background: white; color: #4f46e5; border: 2px solid #4f46e5; }
+        .plan-btn.outline:hover { background: #eef2ff; }
+
+        .how-it-works { padding: 60px 20px; max-width: 700px; margin: 0 auto; }
+        .how-it-works h2 { text-align: center; font-size: 32px; margin-bottom: 40px; }
+        .step-item { display: flex; gap: 20px; margin-bottom: 28px; align-items: flex-start; }
+        .step-num { background: #4f46e5; color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; flex-shrink: 0; }
+        .step-item h4 { margin-bottom: 4px; }
+        .step-item p { font-size: 14px; color: #666; }
+
+        .footer { text-align: center; padding: 30px; color: #999; font-size: 13px; background: #1a1a2e; color: #666; }
+    </style>
+</head>
+<body>
+    <div class="hero">
+        <h1>🤖 AI Assistant for Your Business</h1>
+        <p>Custom AI chatbot trained on YOUR content. Answers customer questions 24/7. Set up in minutes.</p>
+    </div>
+
+    <div class="pricing">
+        <h2>Simple Pricing</h2>
+        <div class="pricing-grid">
+            <div class="plan">
+                <h3>Starter</h3>
+                <div class="price">$500</div>
+                <div class="period">one-time setup</div>
+                <ul>
+                    <li>Custom AI chatbot</li>
+                    <li>Up to 50 pages of content</li>
+                    <li>Chat widget for your website</li>
+                    <li>Email support</li>
+                </ul>
+                <button class="plan-btn outline" onclick="checkout('starter')">Get Started</button>
+            </div>
+
+            <div class="plan popular">
+                <h3>Professional</h3>
+                <div class="price">$1,500</div>
+                <div class="period">one-time setup</div>
+                <ul>
+                    <li>Everything in Starter</li>
+                    <li>Up to 200 pages of content</li>
+                    <li>Custom branding & colors</li>
+                    <li>Priority support</li>
+                    <li>Monthly content updates</li>
+                </ul>
+                <button class="plan-btn" onclick="checkout('professional')">Get Started</button>
+            </div>
+
+            <div class="plan">
+                <h3>Enterprise</h3>
+                <div class="price">$3,000</div>
+                <div class="period">one-time setup</div>
+                <ul>
+                    <li>Everything in Professional</li>
+                    <li>Unlimited content</li>
+                    <li>Multiple chatbots</li>
+                    <li>API access</li>
+                    <li>Dedicated support</li>
+                </ul>
+                <button class="plan-btn outline" onclick="checkout('enterprise')">Contact Us</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="how-it-works">
+        <h2>How It Works</h2>
+        <div class="step-item">
+            <div class="step-num">1</div>
+            <div>
+                <h4>Choose a Plan & Pay</h4>
+                <p>Select the plan that fits your needs. Payment is processed securely through Stripe.</p>
+            </div>
+        </div>
+        <div class="step-item">
+            <div class="step-num">2</div>
+            <div>
+                <h4>Upload Your Content</h4>
+                <p>After payment, you'll get access to your portal where you upload PDFs, documents, and FAQs.</p>
+            </div>
+        </div>
+        <div class="step-item">
+            <div class="step-num">3</div>
+            <div>
+                <h4>Get Your Widget Code</h4>
+                <p>We process your content and give you a simple code snippet to paste on your website.</p>
+            </div>
+        </div>
+        <div class="step-item">
+            <div class="step-num">4</div>
+            <div>
+                <h4>AI Answers Your Customers</h4>
+                <p>Your chatbot goes live instantly. It answers questions 24/7 using only your content.</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        &copy; 2026 AI Assistant Platform. Powered by AI.
+    </div>
+
+    <script>
+        async function checkout(plan) {
+            const name = prompt("Enter your business name:");
+            if (!name) return;
+            const email = prompt("Enter your email address:");
+            if (!email) return;
+
+            try {
+                const res = await fetch("/checkout", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ plan, business_name: name, email }),
+                });
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert(data.error || "Something went wrong.");
+                }
+            } catch (err) {
+                alert("Connection error. Please try again.");
+            }
+        }
+    </script>
+</body>
+</html>

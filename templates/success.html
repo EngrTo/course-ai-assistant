@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment Successful!</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }
+        .card { background: white; border-radius: 16px; padding: 48px 40px; max-width: 500px; width: 100%; box-shadow: 0 4px 16px rgba(0,0,0,0.08); text-align: center; }
+        .icon { font-size: 64px; margin-bottom: 16px; }
+        h1 { margin-bottom: 8px; color: #166534; }
+        p { color: #555; margin-bottom: 24px; line-height: 1.6; }
+        .portal-link { display: inline-block; background: #4f46e5; color: white; padding: 14px 32px; border-radius: 10px; text-decoration: none; font-weight: 600; font-size: 16px; transition: background 0.2s; }
+        .portal-link:hover { background: #4338ca; }
+        .note { margin-top: 20px; font-size: 13px; color: #888; }
+        .note strong { color: #4f46e5; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon">✅</div>
+        <h1>Payment Successful!</h1>
+        <p>Your AI Assistant is being set up. Access your portal to upload documents and get your widget code.</p>
+        <a href="/portal?token={{ token }}" class="portal-link">Go to Your Portal →</a>
+        <p class="note">
+            Bookmark your portal link — it's your private access.<br>
+            We also sent it to <strong>{{ email }}</strong>.
+        </p>
+    </div>
+</body>
+</html>

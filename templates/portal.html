@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your AI Assistant — Portal</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; padding: 40px 20px; }
+        .container { max-width: 700px; margin: 0 auto; }
+        h1 { margin-bottom: 4px; }
+        .subtitle { color: #666; margin-bottom: 32px; }
+        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+        .card h3 { margin-bottom: 12px; color: #4f46e5; }
+        .card p { font-size: 14px; color: #555; margin-bottom: 12px; }
+        .badge { display: inline-block; background: #dcfce7; color: #166534; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; margin-bottom: 16px; }
+        .badge.pending { background: #fef3c7; color: #92400e; }
+
+        pre {
+            background: #1a1a2e;
+            color: #e0e0e0;
+            padding: 16px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 12px 0;
+        }
+
+        .btn {
+            background: #4f46e5;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .btn:hover { background: #4338ca; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.secondary { background: #6b7280; }
+
+        .file-upload { border: 2px dashed #ddd; border-radius: 8px; padding: 24px; text-align: center; margin: 12px 0; cursor: pointer; transition: border-color 0.2s; }
+        .file-upload:hover { border-color: #4f46e5; }
+        .file-upload input { display: none; }
+        .file-upload p { color: #888; font-size: 14px; }
+
+        .file-list { margin: 12px 0; }
+        .file-item { padding: 8px 12px; background: #f8fafc; border-radius: 6px; margin: 4px 0; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+
+        .copy-btn { background: #4f46e5; color: white; border: none; padding: 6px 14px; border-radius: 6px; cursor: pointer; font-size: 12px; }
+        .copy-btn:hover { background: #4338ca; }
+
+        .status-msg { padding: 12px; border-radius: 8px; margin: 12px 0; font-size: 14px; }
+        .status-msg.success { background: #dcfce7; color: #166534; }
+        .status-msg.error { background: #fee2e2; color: #991b1b; }
+        .status-msg.info { background: #dbeafe; color: #1e40af; }
+
+        .test-link { display: inline-block; margin-top: 8px; color: #4f46e5; font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🤖 {{ client.business_name }}</h1>
+        <p class="subtitle">Plan: {{ client.plan | title }} &nbsp;|&nbsp; Client ID: {{ client.client_id }}</p>
+
+        <div class="badge {{ 'pending' if not client.documents_uploaded else '' }}">
+            {{ "✓ Active" if client.documents_uploaded else "⏳ Awaiting Documents" }}
+        </div>
+
+        <!-- Step 1: Upload Documents -->
+        <div class="card">
+            <h3>📄 Step 1: Upload Your Documents</h3>
+            <p>Upload PDFs, text files, or documents you want the AI to learn from. These could be FAQs, course materials, policies, product guides, etc.</p>
+
+            <div class="file-upload" onclick="document.getElementById('fileInput').click()">
+                <p>📁 Click to select files (.pdf, .txt)</p>
+                <input type="file" id="fileInput" multiple accept=".pdf,.txt" onchange="handleFiles(this.files)">
+            </div>
+
+            <div class="file-list" id="fileList"></div>
+
+            <button class="btn" id="uploadBtn" onclick="uploadFiles()" disabled>Upload & Process</button>
+            <div id="uploadStatus"></div>
+        </div>
+
+        <!-- Step 2: Get Widget Code -->
+        <div class="card">
+            <h3>💬 Step 2: Add Chat Widget to Your Website</h3>
+            <p>Copy this code and paste it before the <code>&lt;/body&gt;</code> tag on your website.</p>
+
+            <pre><code id="widgetCode">&lt;script
+  src="{{ base_url }}/static/widget.js"
+  data-client="{{ client.client_id }}"
+  data-title="{{ client.business_name }} Assistant"
+  data-color="#4f46e5"&gt;
+&lt;/script&gt;</code></pre>
+
+            <button class="copy-btn" onclick="copyWidget()">Copy Widget Code</button>
+
+            <a href="/{{ client.client_id }}" class="test-link" target="_blank">→ Test your chatbot</a>
+        </div>
+
+        <!-- Step 3: WordPress Instructions -->
+        <div class="card">
+            <h3>🌐 WordPress Installation</h3>
+            <ol style="margin-left: 20px; font-size: 14px; line-height: 2.2;">
+                <li>Go to <strong>Appearance → Theme File Editor</strong></li>
+                <li>Open <strong>footer.php</strong></li>
+                <li>Paste the widget code just before <code>&lt;/body&gt;</code></li>
+                <li>Click <strong>Update File</strong></li>
+            </ol>
+            <p style="font-size: 13px; color: #888; margin-top: 8px;">Or use a plugin like <strong>"Insert Headers and Footers"</strong> — paste the code in the Footer section.</p>
+        </div>
+    </div>
+
+    <script>
+        const TOKEN = "{{ client.access_token }}";
+        let selectedFiles = [];
+
+        function handleFiles(files) {
+            selectedFiles = Array.from(files);
+            const list = document.getElementById("fileList");
+            list.innerHTML = selectedFiles.map(f =>
+                `<div class="file-item"><span>📄 ${f.name}</span><span>${(f.size / 1024).toFixed(1)} KB</span></div>`
+            ).join("");
+            document.getElementById("uploadBtn").disabled = selectedFiles.length === 0;
+        }
+
+        async function uploadFiles() {
+            const btn = document.getElementById("uploadBtn");
+            const status = document.getElementById("uploadStatus");
+            btn.disabled = true;
+            btn.textContent = "Uploading...";
+            status.innerHTML = '<div class="status-msg info">Processing your documents...</div>';
+
+            const formData = new FormData();
+            formData.append("token", TOKEN);
+            selectedFiles.forEach(f => formData.append("files", f));
+
+            try {
+                const res = await fetch("/portal/upload", {
+                    method: "POST",
+                    body: formData,
+                });
+                const data = await res.json();
+
+                if (data.success) {
+                    status.innerHTML = `<div class="status-msg success">✓ ${data.message}</div>`;
+                    btn.textContent = "Upload & Process";
+                    // Reload to update status badge
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    status.innerHTML = `<div class="status-msg error">${data.error}</div>`;
+                    btn.textContent = "Upload & Process";
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                status.innerHTML = '<div class="status-msg error">Upload failed. Please try again.</div>';
+                btn.textContent = "Upload & Process";
+                btn.disabled = false;
+            }
+        }
+
+        function copyWidget() {
+            const code = document.getElementById("widgetCode").textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                event.target.textContent = "Copied!";
+                setTimeout(() => event.target.textContent = "Copy Widget Code", 2000);
+            });
+        }
+    </script>
+</body>
+</html>
