@@ -32,9 +32,9 @@ stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
-# SendGrid config
-SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
-SENDGRID_FROM_EMAIL = os.getenv("SENDGRID_FROM_EMAIL", "noreply@yourdomain.com")
+# Gmail SMTP config
+GMAIL_EMAIL = os.getenv("GMAIL_EMAIL")
+GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD")
 
 PLAN_PRICES = {
     "starter": 9700,         # $97/month
@@ -170,32 +170,36 @@ def set_password():
 # ── Forgot / Reset Password ─────────────────────────────────
 
 def send_reset_email(to_email: str, reset_url: str):
-    """Send password reset email via SendGrid."""
-    if not SENDGRID_API_KEY:
+    """Send password reset email via Gmail SMTP."""
+    if not GMAIL_EMAIL or not GMAIL_APP_PASSWORD:
         print(f"[DEV] Reset link for {to_email}: {reset_url}")
         return True
-    from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
 
-    message = Mail(
-        from_email=SENDGRID_FROM_EMAIL,
-        to_emails=to_email,
-        subject="Reset Your Password — AI Assistant Platform",
-        html_content=f"""
-        <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px;">
-            <h2>Password Reset</h2>
-            <p>You requested a password reset. Click the button below to set a new password:</p>
-            <a href="{reset_url}" style="display:inline-block;padding:12px 24px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Reset Password</a>
-            <p style="color:#666;font-size:13px;">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
-        </div>
-        """,
-    )
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = "Reset Your Password — AI Assistant Platform"
+    msg["From"] = GMAIL_EMAIL
+    msg["To"] = to_email
+
+    html = f"""\
+    <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px;">
+        <h2>Password Reset</h2>
+        <p>You requested a password reset. Click the button below to set a new password:</p>
+        <a href="{reset_url}" style="display:inline-block;padding:12px 24px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Reset Password</a>
+        <p style="color:#666;font-size:13px;">This link expires in 1 hour. If you didn't request this, ignore this email.</p>
+    </div>
+    """
+    msg.attach(MIMEText(html, "html"))
+
     try:
-        sg = SendGridAPIClient(SENDGRID_API_KEY)
-        sg.send(message)
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_EMAIL, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_EMAIL, to_email, msg.as_string())
         return True
     except Exception as e:
-        print(f"SendGrid error: {e}")
+        print(f"Email error: {e}")
         return False
 
 
