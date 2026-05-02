@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard — AI Assistant Platform</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
+        .navbar { background: #1a1a2e; padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; color: white; }
+        .navbar h1 { font-size: 17px; font-weight: 600; }
+        .navbar .right { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+        .navbar .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .navbar .role-admin { background: #fecaca; color: #991b1b; }
+        .navbar .role-client { background: #dcfce7; color: #166534; }
+        .navbar a { color: #fbbf24; text-decoration: none; }
+        .container { max-width: 1100px; margin: 28px auto; padding: 0 20px; }
+        .section { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .section h3 { margin-bottom: 16px; color: #1a1a2e; font-size: 16px; }
+        .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 24px; }
+        .stat-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+        .stat-card .num { font-size: 28px; font-weight: 700; color: #4f46e5; }
+        .stat-card .label { font-size: 12px; color: #666; margin-top: 2px; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        th { text-align: left; padding: 8px 10px; background: #f8f9fa; color: #666; font-size: 11px; text-transform: uppercase; }
+        td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
+        .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .badge-active { background: #dcfce7; color: #166534; }
+        .badge-starter { background: #e0e7ff; color: #3730a3; }
+        .badge-professional { background: #fef3c7; color: #92400e; }
+        .badge-enterprise { background: #fce7f3; color: #9d174d; }
+        .badge-super { background: #fecaca; color: #991b1b; }
+        .badge-admin { background: #e0e7ff; color: #3730a3; }
+        .btn { padding: 7px 14px; border: none; border-radius: 6px; font-size: 12px; cursor: pointer; font-weight: 500; }
+        .btn-primary { background: #4f46e5; color: white; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-outline { background: white; color: #4f46e5; border: 1px solid #4f46e5; }
+        .btn:hover { opacity: 0.9; }
+        .widget-code { background: #1a1a2e; color: #a5f3fc; padding: 16px; border-radius: 8px; font-family: monospace; font-size: 12px; line-height: 1.6; overflow-x: auto; margin: 10px 0; }
+        .upload-area { border: 2px dashed #ddd; border-radius: 10px; padding: 30px; text-align: center; cursor: pointer; transition: border 0.2s; }
+        .upload-area:hover { border-color: #4f46e5; }
+        .upload-area input { display: none; }
+        .form-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+        .form-row input { padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; flex: 1; min-width: 150px; }
+        .perms { margin: 10px 0; }
+        .perms label { font-size: 12px; margin-right: 14px; }
+        .msg { padding: 10px 14px; border-radius: 6px; margin-bottom: 12px; font-size: 13px; display: none; }
+        .msg-success { background: #dcfce7; color: #166534; }
+        .msg-error { background: #fef2f2; color: #991b1b; }
+        .client-info { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+        .client-info .item { padding: 12px; background: #f8f9fa; border-radius: 8px; }
+        .client-info .item small { color: #666; font-size: 11px; display: block; margin-bottom: 2px; }
+        .client-info .item strong { font-size: 14px; }
+    </style>
+</head>
+<body>
+    <div class="navbar">
+        <h1>🤖 AI Assistant Platform</h1>
+        <div class="right">
+            <span>{{ user.email }}</span>
+            {% if user.is_admin %}<span class="role-badge role-admin">Admin</span>{% endif %}
+            {% if user.is_client %}<span class="role-badge role-client">Client</span>{% endif %}
+            <a href="/logout">Log out</a>
+        </div>
+    </div>
+
+    <div class="container">
+
+        {# ── CLIENT SECTION ── #}
+        {% if user.is_client %}
+        {% set client = user.client %}
+
+        <!-- Client Overview -->
+        <div class="section">
+            <h3>📊 My Chatbot</h3>
+            <div class="client-info">
+                <div class="item"><small>Business</small><strong>{{ client.business_name }}</strong></div>
+                <div class="item"><small>Plan</small><strong><span class="badge badge-{{ client.plan }}">{{ client.plan | title }}</span></strong></div>
+                <div class="item"><small>Status</small><strong>{% if client.documents_uploaded %}✅ Live{% else %}⏳ Awaiting Documents{% endif %}</strong></div>
+                <div class="item"><small>Client ID</small><strong>{{ client.client_id }}</strong></div>
+            </div>
+            {% if client.documents_uploaded %}
+            <a href="/{{ client.client_id }}" target="_blank" class="btn btn-primary">💬 Open Chatbot</a>
+            {% endif %}
+        </div>
+
+        <!-- Upload Documents -->
+        <div class="section">
+            <h3>📄 Upload Documents</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Upload PDFs or text files for the AI to learn from.</p>
+            <div class="msg msg-success" id="upload-msg"></div>
+            <div class="msg msg-error" id="upload-err"></div>
+            <div class="upload-area" onclick="document.getElementById('file-input').click()">
+                <input type="file" id="file-input" multiple accept=".pdf,.txt" onchange="handleUpload()">
+                <p style="font-size:14px;color:#666;">📁 Click to select files (.pdf, .txt)</p>
+            </div>
+        </div>
+
+        <!-- Widget Code -->
+        <div class="section">
+            <h3>💻 Widget Embed Code</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Add this to your website before the &lt;/body&gt; tag:</p>
+            <div class="widget-code" id="widget-code">&lt;script
+  src="{{ base_url }}/static/widget.js"
+  data-client="{{ client.client_id }}"
+  data-title="{{ client.business_name }} Assistant"
+  data-color="#4f46e5"&gt;
+&lt;/script&gt;</div>
+            <button class="btn btn-primary" onclick="copyWidget()" style="margin-top:8px;">📋 Copy Code</button>
+        </div>
+
+        <!-- Upgrade Plan -->
+        {% if client.plan != 'enterprise' %}
+        <div class="section">
+            <h3>⬆️ Upgrade Plan</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Get more features with a higher plan.</p>
+            {% if client.plan == 'starter' %}
+            <button class="btn btn-outline" onclick="upgradePlan('professional')">Upgrade to Professional — $197/mo</button>
+            <button class="btn btn-outline" onclick="upgradePlan('enterprise')" style="margin-left:8px;">Upgrade to Enterprise — $497/mo</button>
+            {% elif client.plan == 'professional' %}
+            <button class="btn btn-outline" onclick="upgradePlan('enterprise')">Upgrade to Enterprise — $497/mo</button>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% endif %}
+
+
+        {# ── ADMIN SECTION ── #}
+        {% if user.is_admin %}
+
+        <!-- Admin Stats -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="num">{{ all_clients | length }}</div>
+                <div class="label">Total Clients</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">{{ all_clients | selectattr('status', 'equalto', 'active') | list | length }}</div>
+                <div class="label">Active</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">${{ mrr }}</div>
+                <div class="label">Monthly Revenue</div>
+            </div>
+            <div class="stat-card">
+                <div class="num">{{ admins | length }}</div>
+                <div class="label">Admins</div>
+            </div>
+        </div>
+
+        <!-- All Clients -->
+        <div class="section">
+            <h3>📋 All Clients</h3>
+            {% if all_clients %}
+            <table>
+                <thead><tr><th>Business</th><th>Email</th><th>Plan</th><th>Status</th><th>Docs</th><th>Created</th></tr></thead>
+                <tbody>
+                {% for c in all_clients %}
+                <tr>
+                    <td><strong>{{ c.business_name }}</strong><br><small style="color:#888;">{{ c.client_id }}</small></td>
+                    <td>{{ c.email }}</td>
+                    <td><span class="badge badge-{{ c.plan }}">{{ c.plan }}</span></td>
+                    <td><span class="badge badge-active">{{ c.status }}</span></td>
+                    <td>{{ "✅" if c.documents_uploaded else "⏳" }}</td>
+                    <td><small>{{ c.created_at[:10] }}</small></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color:#888;font-size:13px;">No clients yet.</p>
+            {% endif %}
+        </div>
+
+        <!-- Manage Admins -->
+        {% if 'manage_admins' in permissions %}
+        <div class="section">
+            <h3>👥 Admins</h3>
+            <table>
+                <thead><tr><th>Email</th><th>Role</th><th>Permissions</th><th>Actions</th></tr></thead>
+                <tbody>
+                {% for a in admins %}
+                <tr>
+                    <td>{{ a.email }}</td>
+                    <td><span class="badge badge-{{ 'super' if a.role == 'super_admin' else 'admin' }}">{{ a.role }}</span></td>
+                    <td><small>{{ a.permissions | join(', ') }}</small></td>
+                    <td>
+                        {% if a.role != 'super_admin' %}
+                        <button class="btn btn-danger" onclick="removeAdmin('{{ a.email }}')">Remove</button>
+                        {% else %}<small style="color:#888;">Protected</small>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+
+            <div style="margin-top:16px;">
+                <button class="btn btn-primary" onclick="document.getElementById('add-admin-form').style.display='block'">+ Add Admin</button>
+                <div id="add-admin-form" style="display:none;margin-top:12px;padding:16px;background:#f8f9fa;border-radius:8px;">
+                    <div class="form-row">
+                        <input type="email" id="new-admin-email" placeholder="email@example.com">
+                        <input type="password" id="new-admin-pass" placeholder="Password (min 8 chars)">
+                    </div>
+                    <div class="perms">
+                        <label><input type="checkbox" name="perm" value="view_clients" checked> View Clients</label>
+                        <label><input type="checkbox" name="perm" value="manage_clients"> Manage Clients</label>
+                        <label><input type="checkbox" name="perm" value="view_analytics" checked> Analytics</label>
+                        <label><input type="checkbox" name="perm" value="manage_admins"> Manage Admins</label>
+                    </div>
+                    <button class="btn btn-primary" onclick="addAdmin()">Create Admin</button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% endif %}
+    </div>
+
+    <script>
+        // Upload handler
+        async function handleUpload() {
+            const files = document.getElementById('file-input').files;
+            if (!files.length) return;
+            const msgEl = document.getElementById('upload-msg');
+            const errEl = document.getElementById('upload-err');
+            msgEl.style.display = 'none';
+            errEl.style.display = 'none';
+
+            const formData = new FormData();
+            for (let f of files) formData.append('files', f);
+
+            try {
+                const res = await fetch('/dashboard/upload', { method: 'POST', body: formData });
+                const data = await res.json();
+                if (data.success) {
+                    msgEl.textContent = data.message;
+                    msgEl.style.display = 'block';
+                    setTimeout(() => location.reload(), 2000);
+                } else {
+                    errEl.textContent = data.error;
+                    errEl.style.display = 'block';
+                }
+            } catch (e) {
+                errEl.textContent = 'Upload failed.';
+                errEl.style.display = 'block';
+            }
+        }
+
+        // Copy widget code
+        function copyWidget() {
+            const code = document.getElementById('widget-code').textContent;
+            navigator.clipboard.writeText(code.replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
+            alert('Widget code copied!');
+        }
+
+        // Upgrade plan
+        async function upgradePlan(plan) {
+            if (!confirm(`Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}?`)) return;
+            const res = await fetch('/upgrade', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan }),
+            });
+            const data = await res.json();
+            if (data.url) window.location.href = data.url;
+            else alert(data.error || 'Failed');
+        }
+
+        // Admin management
+        async function addAdmin() {
+            const email = document.getElementById('new-admin-email').value;
+            const password = document.getElementById('new-admin-pass').value;
+            const perms = [...document.querySelectorAll('input[name="perm"]:checked')].map(c => c.value);
+
+            const res = await fetch('/dashboard/add-admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password, permissions: perms }),
+            });
+            const data = await res.json();
+            if (data.success) location.reload();
+            else alert(data.error || 'Failed');
+        }
+
+        async function removeAdmin(email) {
+            if (!confirm(`Remove admin ${email}?`)) return;
+            const res = await fetch('/dashboard/remove-admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email }),
+            });
+            const data = await res.json();
+            if (data.success) location.reload();
+            else alert(data.error || 'Failed');
+        }
+    </script>
+</body>
+</html>

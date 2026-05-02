@@ -6,3 +6,4 @@ python-dotenv>=1.0.0
 stripe>=8.0.0
 pypdf>=4.0.0
 gunicorn>=22.0.0
+sendgrid>=6.0.0

@@ -6,3 +6,4 @@ faiss_index/
 .DS_Store
 indexes/
 clients_db.json
+admins_db.json

@@ -166,18 +166,13 @@
     </div>
 
     <div class="footer">
-        <p style="margin-bottom:12px;">Already a subscriber? <a href="#" onclick="showLogin()" style="color:#4f46e5;text-decoration:underline;">Log in with your email</a></p>
-        <div id="login-form" style="display:none;margin-bottom:16px;">
-            <input type="email" id="login-email" placeholder="Enter your email" style="padding:8px 14px;border:1px solid #ccc;border-radius:6px;font-size:14px;width:220px;">
-            <button onclick="doLogin()" style="padding:8px 16px;background:#4f46e5;color:white;border:none;border-radius:6px;cursor:pointer;font-size:14px;margin-left:4px;">Log In</button>
-            <p id="login-error" style="color:#ef4444;font-size:12px;margin-top:6px;display:none;"></p>
-        </div>
+        <p style="margin-bottom:12px;">Already a subscriber? <a href="/login" style="color:#4f46e5;text-decoration:underline;">Log in to your dashboard</a></p>
         &copy; 2026 AI Assistant Platform. Powered by AI.
     </div>
 
     <script>
         const subscribedPlan = "{{ subscribed_plan or '' }}";
-        const portalToken = "{{ portal_token or '' }}";
+        const loggedIn = {{ 'true' if logged_in else 'false' }};
 
         if (subscribedPlan) {
             const buttons = document.querySelectorAll('.plan-btn');
@@ -197,10 +192,12 @@
                     btn.style.display = 'none';
                 }
             });
-            // Add a banner at top
+        }
+
+        if (loggedIn) {
             const banner = document.createElement('div');
             banner.style.cssText = 'background:#4f46e5;color:white;text-align:center;padding:12px;font-size:14px;';
-            banner.innerHTML = `You're subscribed to the <strong>${subscribedPlan.charAt(0).toUpperCase() + subscribedPlan.slice(1)}</strong> plan. <a href="/portal?token=${portalToken}" style="color:#fbbf24;margin-left:8px;">Go to Portal →</a> <a href="/logout" style="color:#fca5a5;margin-left:16px;font-size:12px;">Log out</a>`;
+            banner.innerHTML = `Welcome back! <a href="/dashboard" style="color:#fbbf24;margin-left:8px;">Go to Dashboard →</a> <a href="/logout" style="color:#fca5a5;margin-left:16px;font-size:12px;">Log out</a>`;
             document.body.insertBefore(banner, document.body.firstChild);
         }
 
@@ -225,35 +222,6 @@
                 }
             } catch (err) {
                 alert("Connection error. Please try again.");
-            }
-        }
-
-        function showLogin() {
-            document.getElementById('login-form').style.display = 'block';
-        }
-
-        async function doLogin() {
-            const email = document.getElementById('login-email').value.trim();
-            const errEl = document.getElementById('login-error');
-            errEl.style.display = 'none';
-            if (!email) { errEl.textContent = 'Enter your email'; errEl.style.display = 'block'; return; }
-
-            try {
-                const res = await fetch('/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email }),
-                });
-                const data = await res.json();
-                if (data.success) {
-                    window.location.href = data.portal_url;
-                } else {
-                    errEl.textContent = data.error || 'Login failed.';
-                    errEl.style.display = 'block';
-                }
-            } catch (err) {
-                errEl.textContent = 'Connection error.';
-                errEl.style.display = 'block';
             }
         }
 

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login — AI Assistant Platform</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #1a1a2e; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+        .card { background: white; border-radius: 16px; padding: 40px; max-width: 400px; width: 90%; box-shadow: 0 4px 24px rgba(0,0,0,0.2); }
+        h2 { margin-bottom: 6px; color: #1a1a2e; font-size: 22px; }
+        .subtitle { color: #666; margin-bottom: 24px; font-size: 14px; }
+        label { display: block; font-size: 13px; font-weight: 600; color: #333; margin-bottom: 4px; }
+        input { width: 100%; padding: 11px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; margin-bottom: 16px; transition: border 0.2s; }
+        input:focus { outline: none; border-color: #4f46e5; }
+        button { width: 100%; padding: 13px; background: #4f46e5; color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+        button:hover { background: #4338ca; }
+        .error { color: #ef4444; font-size: 13px; margin-bottom: 12px; display: none; padding: 8px 12px; background: #fef2f2; border-radius: 6px; }
+        .footer { text-align: center; margin-top: 20px; font-size: 13px; color: #888; }
+        .footer a { color: #4f46e5; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h2>🔐 Welcome Back</h2>
+        <p class="subtitle">Log in to your dashboard</p>
+        <div class="error" id="error"></div>
+        <form onsubmit="return handleLogin(event)">
+            <label>Email</label>
+            <input type="email" id="email" required placeholder="your@email.com" autocomplete="email">
+            <label>Password</label>
+            <input type="password" id="password" required placeholder="••••••••" autocomplete="current-password">
+            <button type="submit" id="btn">Log In</button>
+        </form>
+        <div class="footer">
+            <a href="/forgot-password">Forgot password?</a> &nbsp;|&nbsp; <a href="/">← Back to home</a>
+        </div>
+    </div>
+    <script>
+        async function handleLogin(e) {
+            e.preventDefault();
+            const errEl = document.getElementById('error');
+            const btn = document.getElementById('btn');
+            errEl.style.display = 'none';
+            btn.textContent = 'Logging in...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: document.getElementById('email').value.trim(),
+                        password: document.getElementById('password').value,
+                    }),
+                });
+                const data = await res.json();
+                if (data.success) {
+                    window.location.href = '/dashboard';
+                } else {
+                    errEl.textContent = data.error || 'Login failed.';
+                    errEl.style.display = 'block';
+                }
+            } catch (err) {
+                errEl.textContent = 'Connection error. Try again.';
+                errEl.style.display = 'block';
+            }
+            btn.textContent = 'Log In';
+            btn.disabled = false;
+            return false;
+        }
+    </script>
+</body>
+</html>
