@@ -96,6 +96,11 @@ def create_checkout():
     if not email:
         return jsonify({"error": "Email is required"}), 400
 
+    # Check if email already has a subscription
+    existing = get_client_by_email(email)
+    if existing:
+        return jsonify({"error": f"This email already has a subscription ({existing['plan'].title()} plan). Use the login link at the bottom of the page to access your portal."}), 400
+
     if not stripe.api_key:
         print("ERROR: STRIPE_SECRET_KEY not set!")
         return jsonify({"error": "Payment system not configured. Contact support."}), 500
