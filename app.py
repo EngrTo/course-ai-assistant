@@ -120,8 +120,8 @@ def payment_success():
 
         # Check if client already created for this session
         email = session.customer_email or ""
-        business_name = session.metadata.get("business_name", "Business")
-        plan = session.metadata.get("plan", "starter")
+        business_name = session.metadata["business_name"] if "business_name" in session.metadata else "Business"
+        plan = session.metadata["plan"] if "plan" in session.metadata else "starter"
 
         # Create client (idempotent — checks for existing)
         client = create_client(email, business_name, plan, session_id)
@@ -159,8 +159,9 @@ def stripe_webhook():
         session = event["data"]["object"]
         if session.get("payment_status") == "paid":
             email = session.get("customer_email", "")
-            business_name = session["metadata"].get("business_name", "Business")
-            plan = session["metadata"].get("plan", "starter")
+            metadata = session.get("metadata", {})
+            business_name = metadata.get("business_name", "Business")
+            plan = metadata.get("plan", "starter")
             create_client(email, business_name, plan, session["id"])
             print(f"✓ Auto-provisioned: {business_name} ({email})")
 
