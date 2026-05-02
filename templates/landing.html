@@ -170,7 +170,30 @@
     </div>
 
     <script>
+        const subscribedPlan = "{{ subscribed_plan or '' }}";
+        const portalToken = "{{ portal_token or '' }}";
+
+        if (subscribedPlan) {
+            const buttons = document.querySelectorAll('.plan-btn');
+            const plans = ['starter', 'professional', 'enterprise'];
+            buttons.forEach((btn, i) => {
+                if (plans[i] === subscribedPlan) {
+                    btn.textContent = '✓ Current Plan';
+                    btn.disabled = true;
+                    btn.style.opacity = '0.6';
+                    btn.style.cursor = 'default';
+                    btn.onclick = null;
+                }
+            });
+            // Add a portal link banner at top
+            const banner = document.createElement('div');
+            banner.style.cssText = 'background:#4f46e5;color:white;text-align:center;padding:12px;font-size:14px;';
+            banner.innerHTML = `You're subscribed to the <strong>${subscribedPlan.charAt(0).toUpperCase() + subscribedPlan.slice(1)}</strong> plan. <a href="/portal?token=${portalToken}" style="color:#fbbf24;margin-left:8px;">Go to Portal →</a>`;
+            document.body.insertBefore(banner, document.body.firstChild);
+        }
+
         async function checkout(plan) {
+            if (subscribedPlan === plan) return;
             const name = prompt("Enter your business name:");
             if (!name) return;
             const email = prompt("Enter your email address:");

@@ -2,7 +2,7 @@
 import os
 import stripe
 from dotenv import load_dotenv
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, make_response
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
 from agent import load_all_indexes, ask
@@ -41,7 +41,14 @@ print(f"Ready! {len(indexes)} client(s) loaded.\n")
 @app.route("/")
 def landing():
     """Public landing page with pricing."""
-    return render_template("landing.html")
+    # Check if user already has a subscription via cookie
+    token = request.cookies.get("portal_token")
+    subscribed_plan = None
+    if token:
+        client = get_client_by_token(token)
+        if client:
+            subscribed_plan = client.get("plan")
+    return render_template("landing.html", subscribed_plan=subscribed_plan, portal_token=token or "")
 
 
 @app.route("/admin")
@@ -134,9 +141,13 @@ def payment_success():
         client = create_client(email, business_name, plan, session_id)
         print(f"Client provisioned: {client['client_id']} for {email}")
 
-        return render_template("success.html",
+        resp = make_response(render_template("success.html",
                                token=client["access_token"],
-                               email=email)
+                               email=email,
+                               plan=plan))
+        # Set a persistent cookie so we recognize them on the landing page
+        resp.set_cookie("portal_token", client["access_token"], max_age=365*24*3600, httponly=True, samesite="Lax")
+        return resp
     except Exception as e:
         print(f"Payment success error: {type(e).__name__}: {e}")
         return f"Error processing payment: {type(e).__name__}. Please contact support with session: {session_id}", 500
