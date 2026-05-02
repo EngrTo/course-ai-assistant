@@ -26,6 +26,8 @@
         td { padding: 8px 10px; border-bottom: 1px solid #f0f0f0; }
         .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
         .badge-active { background: #dcfce7; color: #166534; }
+        .badge-cancelled { background: #fef2f2; color: #991b1b; }
+        .badge-past_due { background: #fef3c7; color: #92400e; }
         .badge-starter { background: #e0e7ff; color: #3730a3; }
         .badge-professional { background: #fef3c7; color: #92400e; }
         .badge-enterprise { background: #fce7f3; color: #9d174d; }
@@ -161,7 +163,7 @@
                     <td><strong>{{ c.business_name }}</strong><br><small style="color:#888;">{{ c.client_id }}</small></td>
                     <td>{{ c.email }}</td>
                     <td><span class="badge badge-{{ c.plan }}">{{ c.plan }}</span></td>
-                    <td><span class="badge badge-active">{{ c.status }}</span></td>
+                    <td><span class="badge badge-{{ c.status }}">{{ c.status }}</span></td>
                     <td>{{ "✅" if c.documents_uploaded else "⏳" }}</td>
                     <td><small>{{ c.created_at[:10] }}</small></td>
                 </tr>

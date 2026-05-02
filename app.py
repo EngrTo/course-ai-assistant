@@ -515,10 +515,31 @@ def stripe_webhook():
         create_client(sess.get("customer_email", ""), metadata.get("business_name", "Business"), metadata.get("plan", "starter"), sess["id"])
 
     elif event["type"] == "customer.subscription.deleted":
-        print(f"✗ Subscription cancelled")
+        sub = event["data"]["object"]
+        customer_email = ""
+        if hasattr(sub, "customer_email"):
+            customer_email = sub.customer_email
+        else:
+            # Look up customer email from Stripe
+            try:
+                customer = stripe.Customer.retrieve(sub["customer"])
+                customer_email = customer.email
+            except Exception:
+                pass
+        if customer_email:
+            client = get_client_by_email(customer_email)
+            if client:
+                update_client(client["client_id"], {"status": "cancelled"})
+                print(f"✗ Subscription cancelled for {customer_email}")
 
     elif event["type"] == "invoice.payment_failed":
-        print(f"⚠ Payment failed")
+        invoice = event["data"]["object"]
+        customer_email = invoice.get("customer_email", "")
+        if customer_email:
+            client = get_client_by_email(customer_email)
+            if client:
+                update_client(client["client_id"], {"status": "past_due"})
+                print(f"⚠ Payment failed for {customer_email}")
 
     return jsonify({"status": "ok"})
 
