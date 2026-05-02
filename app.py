@@ -20,9 +20,9 @@ STRIPE_PUBLISHABLE_KEY = os.getenv("STRIPE_PUBLISHABLE_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 PLAN_PRICES = {
-    "starter": 50000,        # $500 in cents
-    "professional": 150000,  # $1,500
-    "enterprise": 300000,    # $3,000
+    "starter": 9700,         # $97/month
+    "professional": 19700,   # $197/month
+    "enterprise": 49700,     # $497/month
 }
 
 # Build indexes at startup if not already present
@@ -83,13 +83,20 @@ def create_checkout():
                         "description": f"Custom AI chatbot for {business_name}",
                     },
                     "unit_amount": PLAN_PRICES[plan],
+                    "recurring": {"interval": "month"},
                 },
                 "quantity": 1,
             }],
-            mode="payment",
+            mode="subscription",
             success_url=request.url_root.replace("http://", "https://") + "payment-success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=request.url_root.replace("http://", "https://"),
             customer_email=email,
+            subscription_data={
+                "metadata": {
+                    "business_name": business_name,
+                    "plan": plan,
+                },
+            },
             metadata={
                 "business_name": business_name,
                 "plan": plan,
@@ -157,13 +164,25 @@ def stripe_webhook():
 
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        if session.get("payment_status") == "paid":
-            email = session.get("customer_email", "")
-            metadata = session.get("metadata", {})
-            business_name = metadata.get("business_name", "Business")
-            plan = metadata.get("plan", "starter")
-            create_client(email, business_name, plan, session["id"])
-            print(f"✓ Auto-provisioned: {business_name} ({email})")
+        email = session.get("customer_email", "")
+        metadata = session.get("metadata", {})
+        business_name = metadata.get("business_name", "Business")
+        plan = metadata.get("plan", "starter")
+        create_client(email, business_name, plan, session["id"])
+        print(f"✓ Auto-provisioned: {business_name} ({email})")
+
+    elif event["type"] == "customer.subscription.deleted":
+        # Subscription cancelled — deactivate client
+        subscription = event["data"]["object"]
+        metadata = subscription.get("metadata", {})
+        business_name = metadata.get("business_name", "")
+        print(f"✗ Subscription cancelled: {business_name}")
+        # Could deactivate client here in future
+
+    elif event["type"] == "invoice.payment_failed":
+        invoice = event["data"]["object"]
+        email = invoice.get("customer_email", "")
+        print(f"⚠ Payment failed for: {email}")
 
     return jsonify({"status": "ok"})
 
