@@ -79,9 +79,28 @@
         .step-item p { font-size: 14px; color: #666; }
 
         .footer { text-align: center; padding: 30px; color: #999; font-size: 13px; background: #1a1a2e; color: #666; }
+        .navbar { background: #1a1a2e; padding: 14px 32px; display: flex; justify-content: space-between; align-items: center; color: white; }
+        .navbar h1 { font-size: 17px; font-weight: 600; }
+        .navbar .right { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+        .navbar a { color: #fbbf24; text-decoration: none; }
+        .navbar .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+        .navbar .role-admin { background: #fecaca; color: #991b1b; }
+        .navbar .role-client { background: #dcfce7; color: #166534; }
     </style>
 </head>
 <body>
+    <div class="navbar">
+        <h1>🤖 AI Assistant Platform</h1>
+        <div class="right">
+            {% if logged_in %}
+            <a href="/dashboard">Dashboard</a>
+            <a href="/logout" style="color:#fca5a5;">Log out</a>
+            {% else %}
+            <a href="/login">Log in</a>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="hero">
         <h1>🤖 AI Assistant for Your Business</h1>
         <p>Custom AI chatbot trained on YOUR content. Answers customer questions 24/7. Set up in minutes.</p>
@@ -166,13 +185,11 @@
     </div>
 
     <div class="footer">
-        <p style="margin-bottom:12px;">Already a subscriber? <a href="/login" style="color:#4f46e5;text-decoration:underline;">Log in to your dashboard</a></p>
         &copy; 2026 AI Assistant Platform. Powered by AI.
     </div>
 
     <script>
         const subscribedPlan = "{{ subscribed_plan or '' }}";
-        const loggedIn = {{ 'true' if logged_in else 'false' }};
 
         if (subscribedPlan) {
             const buttons = document.querySelectorAll('.plan-btn');
@@ -192,13 +209,6 @@
                     btn.style.display = 'none';
                 }
             });
-        }
-
-        if (loggedIn) {
-            const banner = document.createElement('div');
-            banner.style.cssText = 'background:#4f46e5;color:white;text-align:center;padding:12px;font-size:14px;';
-            banner.innerHTML = `Welcome back! <a href="/dashboard" style="color:#fbbf24;margin-left:8px;">Go to Dashboard →</a> <a href="/logout" style="color:#fca5a5;margin-left:16px;font-size:12px;">Log out</a>`;
-            document.body.insertBefore(banner, document.body.firstChild);
         }
 
         async function checkout(plan) {
