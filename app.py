@@ -239,6 +239,14 @@ def portal_upload():
 def client_chat(client_id):
     """Serve the chat interface for a specific client."""
     if client_id not in indexes:
+        # Check if this is a provisioned client without documents yet
+        client = get_client(client_id)
+        if client:
+            return f"""<html><body style='font-family:sans-serif;text-align:center;padding:60px;'>
+            <h2>⏳ {client['business_name']} Chatbot</h2>
+            <p>This chatbot is set up but waiting for documents to be uploaded.</p>
+            <p>Upload your documents in the <a href='/portal?token={client["access_token"]}'>client portal</a> first.</p>
+            </body></html>"""
         return jsonify({"error": f"Client '{client_id}' not found"}), 404
     return render_template("index.html", client_id=client_id)
 
