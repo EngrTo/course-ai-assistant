@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Course AI Assistant</title>
+    <title>{{ branding.bot_name }}</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -55,7 +55,7 @@
         }
 
         .user {
-            background: #4f46e5;
+            background: {{ branding.primary_color }};
             color: white;
             margin-left: auto;
             border-bottom-right-radius: 4px;
@@ -92,12 +92,12 @@
         }
 
         #userInput:focus {
-            border-color: #4f46e5;
+            border-color: {{ branding.primary_color }};
         }
 
         #sendBtn {
             padding: 14px 28px;
-            background: #4f46e5;
+            background: {{ branding.primary_color }};
             color: white;
             border: none;
             border-radius: 12px;
@@ -134,13 +134,13 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>🎓 Course AI Assistant</h1>
-            <p>Ask me anything about the course materials</p>
+            <h1>{{ branding.bot_name }}</h1>
+            <p>Ask me anything</p>
         </div>
 
         <div class="chat-box" id="chatBox">
             <div class="message bot">
-                Hi! I'm your AI course assistant. I've been trained on the course materials — ask me any question and I'll find the answer for you.
+                {{ branding.welcome_message }}
             </div>
         </div>
 

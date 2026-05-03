@@ -73,7 +73,11 @@ def init_db():
                 page_count INTEGER DEFAULT 0,
                 file_count INTEGER DEFAULT 0,
                 stripe_customer_id TEXT,
-                stripe_subscription_id TEXT
+                stripe_subscription_id TEXT,
+                primary_color TEXT DEFAULT '#4f46e5',
+                bot_name TEXT DEFAULT 'AI Assistant',
+                welcome_message TEXT DEFAULT 'Hi! How can I help you today?',
+                api_key TEXT
             );
             CREATE TABLE IF NOT EXISTS admins (
                 email TEXT PRIMARY KEY,
@@ -91,6 +95,10 @@ def init_db():
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS file_count INTEGER DEFAULT 0")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS primary_color TEXT DEFAULT '#4f46e5'")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'AI Assistant'")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS welcome_message TEXT DEFAULT 'Hi! How can I help you today?'")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS api_key TEXT")
     else:
         cur.execute("""CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
@@ -108,7 +116,11 @@ def init_db():
             page_count INTEGER DEFAULT 0,
             file_count INTEGER DEFAULT 0,
             stripe_customer_id TEXT,
-            stripe_subscription_id TEXT
+            stripe_subscription_id TEXT,
+            primary_color TEXT DEFAULT '#4f46e5',
+            bot_name TEXT DEFAULT 'AI Assistant',
+            welcome_message TEXT DEFAULT 'Hi! How can I help you today?',
+            api_key TEXT
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS admins (
             email TEXT PRIMARY KEY,

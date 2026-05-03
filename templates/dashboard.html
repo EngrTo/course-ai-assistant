@@ -122,11 +122,73 @@
             <div class="widget-code" id="widget-code">&lt;script
   src="{{ base_url }}/static/widget.js"
   data-client="{{ client.client_id }}"
-  data-title="{{ client.business_name }} Assistant"
-  data-color="#4f46e5"&gt;
+  data-title="{{ client.bot_name or 'AI Assistant' }}"
+  data-color="{{ client.primary_color or '#4f46e5' }}"
+  data-welcome="{{ client.welcome_message or 'Hi! How can I help you today?' }}"&gt;
 &lt;/script&gt;</div>
             <button class="btn btn-primary" onclick="copyWidget()" style="margin-top:8px;">📋 Copy Code</button>
         </div>
+
+        <!-- Custom Branding (Professional+) -->
+        {% if client.plan in ['professional', 'enterprise'] %}
+        <div class="section">
+            <h3>🎨 Custom Branding</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Customize your chatbot's appearance.</p>
+            <div class="msg msg-success" id="branding-msg" style="display:none;"></div>
+            <div style="display:grid;gap:12px;max-width:400px;">
+                <div>
+                    <label style="font-size:13px;font-weight:600;">Bot Name</label>
+                    <input type="text" id="brand-name" value="{{ client.bot_name or 'AI Assistant' }}" maxlength="50" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;margin-top:4px;">
+                </div>
+                <div>
+                    <label style="font-size:13px;font-weight:600;">Welcome Message</label>
+                    <input type="text" id="brand-welcome" value="{{ client.welcome_message or 'Hi! How can I help you today?' }}" maxlength="200" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;margin-top:4px;">
+                </div>
+                <div>
+                    <label style="font-size:13px;font-weight:600;">Primary Color</label>
+                    <div style="display:flex;gap:8px;align-items:center;margin-top:4px;">
+                        <input type="color" id="brand-color" value="{{ client.primary_color or '#4f46e5' }}" style="width:40px;height:36px;border:none;cursor:pointer;">
+                        <input type="text" id="brand-color-text" value="{{ client.primary_color or '#4f46e5' }}" style="padding:8px 12px;border:1px solid #ddd;border-radius:6px;width:120px;">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveBranding()">💾 Save Branding</button>
+            </div>
+        </div>
+        {% elif client.plan == 'starter' %}
+        <div class="section" style="opacity:0.7;">
+            <h3>🎨 Custom Branding <span class="badge badge-professional">Professional</span></h3>
+            <p style="font-size:13px;color:#666;">Upgrade to Professional to customize your chatbot's colors, name, and welcome message.</p>
+        </div>
+        {% endif %}
+
+        <!-- API Access (Enterprise) -->
+        {% if client.plan == 'enterprise' %}
+        <div class="section">
+            <h3>🔑 API Access</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Use the API to integrate your chatbot into other apps.</p>
+            {% if client.api_key %}
+            <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:12px;">
+                <small style="color:#666;font-weight:600;">Your API Key:</small>
+                <div style="font-family:monospace;font-size:13px;margin-top:4px;word-break:break-all;">{{ client.api_key }}</div>
+            </div>
+            <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:12px;">
+                <small style="color:#666;font-weight:600;">Endpoint:</small>
+                <div style="font-family:monospace;font-size:13px;margin-top:4px;">POST {{ base_url }}/api/v1/{{ client.client_id }}/ask</div>
+                <small style="color:#666;font-weight:600;margin-top:8px;display:block;">Example:</small>
+                <pre style="font-size:12px;margin-top:4px;background:#1a1a2e;color:#e2e8f0;padding:12px;border-radius:6px;overflow-x:auto;">curl -X POST {{ base_url }}/api/v1/{{ client.client_id }}/ask \
+  -H "Authorization: Bearer {{ client.api_key }}" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How do I get started?"}'</pre>
+            </div>
+            {% endif %}
+            <button class="btn btn-outline" onclick="generateApiKey()">{{ '🔄 Regenerate' if client.api_key else '🔑 Generate' }} API Key</button>
+        </div>
+        {% else %}
+        <div class="section" style="opacity:0.7;">
+            <h3>🔑 API Access <span class="badge badge-enterprise">Enterprise</span></h3>
+            <p style="font-size:13px;color:#666;">Upgrade to Enterprise for programmatic API access to your chatbot.</p>
+        </div>
+        {% endif %}
 
         <!-- Upgrade Plan -->
         {% if client.plan != 'enterprise' %}
@@ -293,6 +355,60 @@
             const code = document.getElementById('widget-code').textContent;
             navigator.clipboard.writeText(code.replace(/&lt;/g, '<').replace(/&gt;/g, '>'));
             alert('Widget code copied!');
+        }
+
+        // Branding
+        async function saveBranding() {
+            const colorPicker = document.getElementById('brand-color');
+            const colorText = document.getElementById('brand-color-text');
+            if (colorPicker) colorPicker.addEventListener('input', () => { colorText.value = colorPicker.value; });
+            if (colorText) colorText.addEventListener('input', () => { colorPicker.value = colorText.value; });
+
+            const body = {
+                bot_name: document.getElementById('brand-name')?.value || '',
+                welcome_message: document.getElementById('brand-welcome')?.value || '',
+                primary_color: document.getElementById('brand-color')?.value || '#4f46e5',
+            };
+            const res = await fetch('/dashboard/branding', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            });
+            const data = await res.json();
+            if (data.success) {
+                const msg = document.getElementById('branding-msg');
+                msg.textContent = data.message;
+                msg.style.display = 'block';
+                setTimeout(() => msg.style.display = 'none', 3000);
+            } else {
+                alert(data.error || 'Failed');
+            }
+        }
+
+        // Sync color picker and text input
+        (function() {
+            const cp = document.getElementById('brand-color');
+            const ct = document.getElementById('brand-color-text');
+            if (cp && ct) {
+                cp.addEventListener('input', () => { ct.value = cp.value; });
+                ct.addEventListener('input', () => { if (/^#[0-9a-fA-F]{6}$/.test(ct.value)) cp.value = ct.value; });
+            }
+        })();
+
+        // API Key
+        async function generateApiKey() {
+            if (!confirm('Generate a new API key? Any existing key will be replaced.')) return;
+            const res = await fetch('/dashboard/generate-api-key', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert('API key generated! Reloading...');
+                location.reload();
+            } else {
+                alert(data.error || 'Failed');
+            }
         }
 
         // Upgrade plan

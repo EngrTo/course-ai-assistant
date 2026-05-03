@@ -8,6 +8,7 @@
   const API_BASE = script.src.replace("/static/widget.js", "");
   const THEME_COLOR = script.getAttribute("data-color") || "#4f46e5";
   const TITLE = script.getAttribute("data-title") || "AI Assistant";
+  const WELCOME = script.getAttribute("data-welcome") || "Hi! How can I help you today?";
   const POSITION = script.getAttribute("data-position") || "right";
 
   if (!CLIENT_ID) {
@@ -184,7 +185,7 @@
       <button id="ai-widget-close">&times;</button>
     </div>
     <div id="ai-widget-messages">
-      <div class="ai-w-msg bot">Hi! How can I help you today?</div>
+      <div class="ai-w-msg bot">${WELCOME}</div>
     </div>
     <div id="ai-widget-input-area">
       <input type="text" id="ai-widget-input" placeholder="Type your question..." autocomplete="off">

@@ -484,6 +484,86 @@ def dashboard_delete_file():
         return jsonify({"error": "Delete failed."}), 500
 
 
+@app.route("/dashboard/branding", methods=["POST"])
+@login_required
+def dashboard_branding():
+    """Save widget branding settings (Professional+ only)."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "No subscription found."}), 403
+
+    client = user["client"]
+    plan = client.get("plan", "starter")
+    if plan == "starter":
+        return jsonify({"error": "Custom branding requires Professional or Enterprise plan."}), 403
+
+    data = request.get_json()
+    primary_color = data.get("primary_color", "#4f46e5").strip()
+    bot_name = data.get("bot_name", "AI Assistant").strip()[:50]
+    welcome_message = data.get("welcome_message", "Hi! How can I help you today?").strip()[:200]
+
+    # Basic color validation
+    if not primary_color.startswith("#") or len(primary_color) not in (4, 7):
+        return jsonify({"error": "Invalid color format. Use hex like #4f46e5"}), 400
+
+    update_client(client["client_id"], {
+        "primary_color": primary_color,
+        "bot_name": bot_name,
+        "welcome_message": welcome_message,
+    })
+    return jsonify({"success": True, "message": "Branding updated!"})
+
+
+@app.route("/dashboard/generate-api-key", methods=["POST"])
+@login_required
+def dashboard_generate_api_key():
+    """Generate API key (Enterprise only)."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "No subscription found."}), 403
+
+    client = user["client"]
+    if client.get("plan") != "enterprise":
+        return jsonify({"error": "API access requires Enterprise plan."}), 403
+
+    api_key = f"ak_{secrets.token_hex(24)}"
+    update_client(client["client_id"], {"api_key": api_key})
+    return jsonify({"success": True, "api_key": api_key})
+
+
+# ── Public API (Enterprise) ──────────────────────────────────
+
+@app.route("/api/v1/<client_id>/ask", methods=["POST"])
+def api_ask(client_id):
+    """Public API endpoint for Enterprise clients."""
+    # Auth via API key
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return jsonify({"error": "Missing Authorization header. Use: Bearer ak_xxx"}), 401
+
+    api_key = auth_header[7:]
+    client = get_client(client_id)
+    if not client:
+        return jsonify({"error": "Client not found."}), 404
+    if client.get("plan") != "enterprise":
+        return jsonify({"error": "API access requires Enterprise plan."}), 403
+    if not client.get("api_key") or client["api_key"] != api_key:
+        return jsonify({"error": "Invalid API key."}), 401
+    if client.get("status") != "active":
+        return jsonify({"error": "Subscription not active."}), 403
+
+    data = request.get_json()
+    question = data.get("question", "").strip() if data else ""
+    if not question:
+        return jsonify({"error": "Question is required."}), 400
+
+    if client_id not in indexes:
+        return jsonify({"error": "No documents indexed yet."}), 404
+
+    answer = ask(question, client_id, indexes)
+    return jsonify({"answer": answer, "client_id": client_id})
+
+
 @app.route("/dashboard/add-admin", methods=["POST"])
 @login_required
 def dashboard_add_admin():
@@ -751,15 +831,20 @@ def stripe_webhook():
 
 @app.route("/<client_id>")
 def client_chat(client_id):
+    client = get_client(client_id)
     if client_id not in indexes:
-        client = get_client(client_id)
         if client:
             return f"""<html><body style='font-family:sans-serif;text-align:center;padding:60px;'>
             <h2>⏳ {client['business_name']} Chatbot</h2>
             <p>Waiting for documents. The owner needs to upload content first.</p>
             </body></html>"""
         return jsonify({"error": f"Client '{client_id}' not found"}), 404
-    return render_template("index.html", client_id=client_id)
+    branding = {
+        "primary_color": client.get("primary_color", "#4f46e5") if client else "#4f46e5",
+        "bot_name": client.get("bot_name", "AI Assistant") if client else "AI Assistant",
+        "welcome_message": client.get("welcome_message", "Hi! How can I help you today?") if client else "Hi! How can I help you today?",
+    }
+    return render_template("index.html", client_id=client_id, branding=branding)
 
 
 @app.route("/<client_id>/ask", methods=["POST"])
