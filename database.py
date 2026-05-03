@@ -71,7 +71,9 @@ def init_db():
                 reset_token TEXT,
                 reset_expires FLOAT,
                 page_count INTEGER DEFAULT 0,
-                file_count INTEGER DEFAULT 0
+                file_count INTEGER DEFAULT 0,
+                stripe_customer_id TEXT,
+                stripe_subscription_id TEXT
             );
             CREATE TABLE IF NOT EXISTS admins (
                 email TEXT PRIMARY KEY,
@@ -87,6 +89,8 @@ def init_db():
         # Add columns if missing (for existing databases)
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS page_count INTEGER DEFAULT 0")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS file_count INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT")
     else:
         cur.execute("""CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
@@ -102,7 +106,9 @@ def init_db():
             reset_token TEXT,
             reset_expires REAL,
             page_count INTEGER DEFAULT 0,
-            file_count INTEGER DEFAULT 0
+            file_count INTEGER DEFAULT 0,
+            stripe_customer_id TEXT,
+            stripe_subscription_id TEXT
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS admins (
             email TEXT PRIMARY KEY,

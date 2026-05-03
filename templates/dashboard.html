@@ -297,15 +297,21 @@
 
         // Upgrade plan
         async function upgradePlan(plan) {
-            if (!confirm(`Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}?`)) return;
+            if (!confirm(`Upgrade to ${plan.charAt(0).toUpperCase() + plan.slice(1)}? You'll only be charged the prorated difference for the rest of this billing period.`)) return;
             const res = await fetch('/upgrade', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ plan }),
             });
             const data = await res.json();
-            if (data.url) window.location.href = data.url;
-            else alert(data.error || 'Failed');
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else if (data.url) {
+                window.location.href = data.url;
+            } else {
+                alert(data.error || 'Failed');
+            }
         }
 
         // Admin management

@@ -49,6 +49,31 @@ PLAN_LIMITS = {
     "enterprise": {"max_files": 999, "max_pages": 9999},
 }
 
+# Stripe Price IDs — set via env vars or auto-created
+STRIPE_PRICE_IDS = {
+    "starter": os.getenv("STRIPE_PRICE_STARTER"),
+    "professional": os.getenv("STRIPE_PRICE_PROFESSIONAL"),
+    "enterprise": os.getenv("STRIPE_PRICE_ENTERPRISE"),
+}
+
+
+def get_or_create_stripe_price(plan: str) -> str:
+    """Get existing Stripe Price ID or create one."""
+    if STRIPE_PRICE_IDS.get(plan):
+        return STRIPE_PRICE_IDS[plan]
+
+    # Create product + price in Stripe
+    product = stripe.Product.create(name=f"AI Assistant — {plan.title()} Plan")
+    price = stripe.Price.create(
+        product=product.id,
+        unit_amount=PLAN_PRICES[plan],
+        currency="usd",
+        recurring={"interval": "month"},
+    )
+    STRIPE_PRICE_IDS[plan] = price.id
+    print(f"Created Stripe Price for {plan}: {price.id}")
+    return price.id
+
 # Build indexes at startup if not already present
 if not os.path.exists(INDEXES_DIR) or not os.listdir(INDEXES_DIR):
     print("Building indexes for all clients...")
@@ -527,20 +552,10 @@ def create_checkout():
         return jsonify({"error": "Payment system not configured."}), 500
 
     try:
+        price_id = get_or_create_stripe_price(plan)
         checkout_session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            line_items=[{
-                "price_data": {
-                    "currency": "usd",
-                    "product_data": {
-                        "name": f"AI Assistant — {plan.title()} Plan",
-                        "description": f"Custom AI chatbot for {business_name}",
-                    },
-                    "unit_amount": PLAN_PRICES[plan],
-                    "recurring": {"interval": "month"},
-                },
-                "quantity": 1,
-            }],
+            line_items=[{"price": price_id, "quantity": 1}],
             mode="subscription",
             success_url=request.url_root.replace("http://", "https://") + "payment-success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=request.url_root.replace("http://", "https://"),
@@ -573,27 +588,40 @@ def upgrade_plan():
     if plan_order.get(new_plan, 0) <= plan_order.get(client["plan"], 0):
         return jsonify({"error": "You can only upgrade to a higher plan."}), 400
 
+    subscription_id = client.get("stripe_subscription_id")
+
     try:
-        checkout_session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{
-                "price_data": {
-                    "currency": "usd",
-                    "product_data": {
-                        "name": f"AI Assistant — {new_plan.title()} Plan (Upgrade)",
-                    },
-                    "unit_amount": PLAN_PRICES[new_plan],
-                    "recurring": {"interval": "month"},
-                },
-                "quantity": 1,
-            }],
-            mode="subscription",
-            success_url=request.url_root.replace("http://", "https://") + f"upgrade-success?plan={new_plan}&client_id={client['client_id']}",
-            cancel_url=request.url_root.replace("http://", "https://") + "dashboard",
-            customer_email=client["email"],
-            metadata={"business_name": client["business_name"], "plan": new_plan, "client_id": client["client_id"]},
-        )
-        return jsonify({"url": checkout_session.url})
+        if subscription_id:
+            # Modify existing subscription with proration
+            subscription = stripe.Subscription.retrieve(subscription_id)
+            new_price_id = get_or_create_stripe_price(new_plan)
+
+            stripe.Subscription.modify(
+                subscription_id,
+                items=[{
+                    "id": subscription.items.data[0].id,
+                    "price": new_price_id,
+                }],
+                proration_behavior="create_prorations",
+                metadata={"plan": new_plan, "client_id": client["client_id"]},
+            )
+
+            # Update plan immediately — Stripe handles billing
+            update_client(client["client_id"], {"plan": new_plan})
+            return jsonify({"success": True, "message": f"Upgraded to {new_plan.title()}! Prorated billing applied."})
+        else:
+            # No subscription ID stored — fallback to new checkout
+            new_price_id = get_or_create_stripe_price(new_plan)
+            checkout_session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{"price": new_price_id, "quantity": 1}],
+                mode="subscription",
+                success_url=request.url_root.replace("http://", "https://") + f"upgrade-success?plan={new_plan}&client_id={client['client_id']}",
+                cancel_url=request.url_root.replace("http://", "https://") + "dashboard",
+                customer_email=client["email"],
+                metadata={"business_name": client["business_name"], "plan": new_plan, "client_id": client["client_id"]},
+            )
+            return jsonify({"url": checkout_session.url})
     except Exception as e:
         print(f"Upgrade error: {type(e).__name__}: {e}")
         return jsonify({"error": "Upgrade failed."}), 500
@@ -650,7 +678,35 @@ def stripe_webhook():
     if event["type"] == "checkout.session.completed":
         sess = event["data"]["object"]
         metadata = sess.get("metadata", {})
-        create_client(sess.get("customer_email", ""), metadata.get("business_name", "Business"), metadata.get("plan", "starter"), sess["id"])
+        client_id = metadata.get("client_id", "")
+        
+        # Store Stripe customer and subscription IDs
+        stripe_customer_id = sess.get("customer", "")
+        stripe_subscription_id = sess.get("subscription", "")
+        
+        if client_id:
+            # Upgrade flow — client already exists
+            new_plan = metadata.get("plan", "")
+            if new_plan:
+                update_client(client_id, {
+                    "plan": new_plan,
+                    "stripe_customer_id": stripe_customer_id,
+                    "stripe_subscription_id": stripe_subscription_id,
+                })
+                print(f"⬆ Upgraded {client_id} to {new_plan}")
+        else:
+            # New signup flow
+            client = create_client(
+                sess.get("customer_email", ""),
+                metadata.get("business_name", "Business"),
+                metadata.get("plan", "starter"),
+                sess["id"]
+            )
+            update_client(client["client_id"], {
+                "stripe_customer_id": stripe_customer_id,
+                "stripe_subscription_id": stripe_subscription_id,
+            })
+            print(f"✓ New client: {client['client_id']}")
 
     elif event["type"] == "customer.subscription.deleted":
         sub = event["data"]["object"]
@@ -678,6 +734,15 @@ def stripe_webhook():
             if client:
                 update_client(client["client_id"], {"status": "past_due"})
                 print(f"⚠ Payment failed for {customer_email}")
+
+    elif event["type"] == "customer.subscription.updated":
+        sub = event["data"]["object"]
+        metadata = sub.get("metadata", {})
+        client_id = metadata.get("client_id", "")
+        new_plan = metadata.get("plan", "")
+        if client_id and new_plan:
+            update_client(client_id, {"plan": new_plan})
+            print(f"⬆ Subscription updated: {client_id} → {new_plan}")
 
     return jsonify({"status": "ok"})
 
