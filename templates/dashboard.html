@@ -89,7 +89,24 @@
         <!-- Upload Documents -->
         <div class="section">
             <h3>📄 Upload Documents</h3>
-            <p style="font-size:13px;color:#666;margin-bottom:12px;">Upload PDFs or text files for the AI to learn from.</p>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Upload PDFs or text files for the AI to learn from. Re-uploading a file with the same name replaces it.</p>
+            <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:12px;display:flex;gap:20px;">
+                <div><small style="color:#666;">Files</small><br><strong>{{ file_count }}/{{ plan_limits.max_files }}</strong></div>
+                <div><small style="color:#666;">Pages</small><br><strong>{{ page_count }}/{{ plan_limits.max_pages }}</strong></div>
+            </div>
+            {% if uploaded_files %}
+            <div style="margin-bottom:12px;">
+                <small style="color:#666;font-weight:600;">Uploaded Files:</small>
+                <ul style="list-style:none;padding:0;margin:8px 0 0 0;">
+                    {% for fname in uploaded_files %}
+                    <li style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#fff;border:1px solid #e5e7eb;border-radius:6px;margin-bottom:4px;font-size:13px;">
+                        <span>📄 {{ fname }}</span>
+                        <button onclick="deleteFile('{{ fname }}')" style="background:#ef4444;color:#fff;border:none;border-radius:4px;padding:3px 8px;font-size:11px;cursor:pointer;">✕ Remove</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            {% endif %}
             <div class="msg msg-success" id="upload-msg"></div>
             <div class="msg msg-error" id="upload-err"></div>
             <div class="upload-area" onclick="document.getElementById('file-input').click()">
@@ -247,6 +264,27 @@
             } catch (e) {
                 errEl.textContent = 'Upload failed.';
                 errEl.style.display = 'block';
+            }
+        }
+
+        // Delete file handler
+        async function deleteFile(filename) {
+            if (!confirm(`Remove "${filename}"? This will re-process your remaining documents.`)) return;
+            try {
+                const res = await fetch('/dashboard/delete-file', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({filename})
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert(data.error || 'Delete failed.');
+                }
+            } catch (e) {
+                alert('Delete failed.');
             }
         }
 

@@ -69,7 +69,9 @@ def init_db():
                 created_at TEXT,
                 documents_uploaded BOOLEAN DEFAULT FALSE,
                 reset_token TEXT,
-                reset_expires FLOAT
+                reset_expires FLOAT,
+                page_count INTEGER DEFAULT 0,
+                file_count INTEGER DEFAULT 0
             );
             CREATE TABLE IF NOT EXISTS admins (
                 email TEXT PRIMARY KEY,
@@ -82,6 +84,9 @@ def init_db():
                 reset_expires FLOAT
             );
         """)
+        # Add columns if missing (for existing databases)
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS page_count INTEGER DEFAULT 0")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS file_count INTEGER DEFAULT 0")
     else:
         cur.execute("""CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
@@ -95,7 +100,9 @@ def init_db():
             created_at TEXT,
             documents_uploaded INTEGER DEFAULT 0,
             reset_token TEXT,
-            reset_expires REAL
+            reset_expires REAL,
+            page_count INTEGER DEFAULT 0,
+            file_count INTEGER DEFAULT 0
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS admins (
             email TEXT PRIMARY KEY,

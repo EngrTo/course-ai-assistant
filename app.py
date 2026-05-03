@@ -43,6 +43,12 @@ PLAN_PRICES = {
     "enterprise": 49700,     # $497/month
 }
 
+PLAN_LIMITS = {
+    "starter": {"max_files": 5, "max_pages": 50},
+    "professional": {"max_files": 20, "max_pages": 200},
+    "enterprise": {"max_files": 999, "max_pages": 9999},
+}
+
 # Build indexes at startup if not already present
 if not os.path.exists(INDEXES_DIR) or not os.listdir(INDEXES_DIR):
     print("Building indexes for all clients...")
@@ -278,6 +284,14 @@ def dashboard():
     if user["is_client"]:
         base_url = request.url_root.replace("http://", "https://").rstrip("/")
         data["base_url"] = base_url
+        client = user["client"]
+        plan = client.get("plan", "starter")
+        data["plan_limits"] = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
+        data["page_count"] = int(client.get("page_count", 0) or 0)
+        data["file_count"] = int(client.get("file_count", 0) or 0)
+        # List uploaded files
+        docs_dir = os.path.join("clients", client["client_id"], "documents")
+        data["uploaded_files"] = sorted([f for f in os.listdir(docs_dir) if f.endswith((".pdf", ".txt"))]) if os.path.exists(docs_dir) else []
 
     return render_template("dashboard.html", **data)
 
@@ -285,12 +299,15 @@ def dashboard():
 @app.route("/dashboard/upload", methods=["POST"])
 @login_required
 def dashboard_upload():
-    """Handle document upload."""
+    """Handle document upload with plan limits."""
     user = get_user_context()
     if not user or not user["is_client"]:
         return jsonify({"error": "No subscription found."}), 403
 
     client = user["client"]
+    plan = client.get("plan", "starter")
+    limits = PLAN_LIMITS.get(plan, PLAN_LIMITS["starter"])
+
     files = request.files.getlist("files")
     if not files:
         return jsonify({"error": "No files uploaded"}), 400
@@ -299,26 +316,147 @@ def dashboard_upload():
     docs_dir = os.path.join("clients", client_id, "documents")
     os.makedirs(docs_dir, exist_ok=True)
 
+    # Count existing files
+    existing_files = [f for f in os.listdir(docs_dir) if f.endswith((".pdf", ".txt"))] if os.path.exists(docs_dir) else []
+    new_valid = [f for f in files if f.filename and f.filename.endswith((".pdf", ".txt"))]
+
+    # Determine which files are replacements vs truly new
+    existing_names = set(existing_files)
+    new_names = [secure_filename(f.filename) for f in new_valid]
+    truly_new = [n for n in new_names if n not in existing_names]
+
+    if len(existing_files) + len(truly_new) > limits["max_files"]:
+        return jsonify({"error": f"File limit exceeded. Your {plan.title()} plan allows {limits['max_files']} files. You have {len(existing_files)} already."}), 400
+
+    # Count pages in new files
+    from pypdf import PdfReader
+    import math
+    total_new_pages = 0
+    for f in new_valid:
+        if f.filename.endswith(".pdf"):
+            try:
+                reader = PdfReader(f)
+                total_new_pages += len(reader.pages)
+                f.seek(0)  # Reset file pointer after reading
+            except Exception:
+                total_new_pages += 1  # Count as 1 if can't read
+        elif f.filename.endswith(".txt"):
+            content = f.read()
+            f.seek(0)  # Reset file pointer after reading
+            # Estimate pages: ~3000 characters per page, minimum 1
+            total_new_pages += max(1, math.ceil(len(content) / 3000))
+
+    # For replacements, recalculate total from scratch after save
+    # For page limit check, use total_new_pages against limit (we'll recalculate after)
+    existing_pages = int(client.get("page_count", 0) or 0)
+
+    # Subtract pages of files being replaced (they'll be overwritten)
+    replaced_names = [n for n in new_names if n in existing_names]
+    replaced_pages = 0
+    for fname in replaced_names:
+        fpath = os.path.join(docs_dir, fname)
+        if fname.endswith(".pdf"):
+            try:
+                reader = PdfReader(fpath)
+                replaced_pages += len(reader.pages)
+            except Exception:
+                replaced_pages += 1
+        elif fname.endswith(".txt"):
+            try:
+                with open(fpath, "rb") as tf:
+                    replaced_pages += max(1, math.ceil(len(tf.read()) / 3000))
+            except Exception:
+                replaced_pages += 1
+
+    net_new_pages = existing_pages - replaced_pages + total_new_pages
+    if net_new_pages > limits["max_pages"]:
+        return jsonify({"error": f"Page limit exceeded. Your {plan.title()} plan allows {limits['max_pages']} pages. Current: {existing_pages}, adding: {total_new_pages}, replacing: {replaced_pages} pages."}), 400
+
+    # Save files
     saved = 0
-    for f in files:
-        if f.filename and f.filename.endswith((".pdf", ".txt")):
-            filename = secure_filename(f.filename)
-            f.save(os.path.join(docs_dir, filename))
-            saved += 1
+    for f in new_valid:
+        filename = secure_filename(f.filename)
+        f.save(os.path.join(docs_dir, filename))
+        saved += 1
 
     if saved == 0:
         return jsonify({"error": "No valid files (.pdf or .txt) found"}), 400
+
+    # Final file count after save
+    final_files = [f for f in os.listdir(docs_dir) if f.endswith((".pdf", ".txt"))]
 
     try:
         ingest_client(client_id)
         from agent import load_all_indexes as reload_indexes
         new_indexes = reload_indexes()
         indexes.update(new_indexes)
-        update_client(client_id, {"documents_uploaded": True})
-        return jsonify({"success": True, "message": f"{saved} file(s) uploaded and processed!"})
+        update_client(client_id, {"documents_uploaded": True, "page_count": net_new_pages, "file_count": len(final_files)})
+        replaced_msg = f" ({len(replaced_names)} replaced)" if replaced_names else ""
+        return jsonify({"success": True, "message": f"{saved} file(s) uploaded and processed! ({total_new_pages} pages){replaced_msg}"})
     except Exception as e:
         print(f"Ingest error [{client_id}]: {e}")
         return jsonify({"error": "Processing failed. We'll fix this shortly."}), 500
+
+
+@app.route("/dashboard/delete-file", methods=["POST"])
+@login_required
+def dashboard_delete_file():
+    """Delete a specific uploaded file."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "No subscription found."}), 403
+
+    client = user["client"]
+    client_id = client["client_id"]
+    data = request.get_json()
+    filename = data.get("filename", "")
+
+    if not filename:
+        return jsonify({"error": "No filename specified."}), 400
+
+    docs_dir = os.path.join("clients", client_id, "documents")
+    filepath = os.path.join(docs_dir, secure_filename(filename))
+
+    if not os.path.exists(filepath):
+        return jsonify({"error": "File not found."}), 404
+
+    # Count pages being removed
+    from pypdf import PdfReader
+    import math
+    removed_pages = 0
+    if filepath.endswith(".pdf"):
+        try:
+            reader = PdfReader(filepath)
+            removed_pages = len(reader.pages)
+        except Exception:
+            removed_pages = 1
+    elif filepath.endswith(".txt"):
+        try:
+            with open(filepath, "rb") as tf:
+                removed_pages = max(1, math.ceil(len(tf.read()) / 3000))
+        except Exception:
+            removed_pages = 1
+
+    os.remove(filepath)
+
+    # Recalculate counts
+    remaining_files = [f for f in os.listdir(docs_dir) if f.endswith((".pdf", ".txt"))] if os.path.exists(docs_dir) else []
+    existing_pages = int(client.get("page_count", 0) or 0)
+    new_page_count = max(0, existing_pages - removed_pages)
+
+    try:
+        if remaining_files:
+            ingest_client(client_id)
+            from agent import load_all_indexes as reload_indexes
+            new_indexes = reload_indexes()
+            indexes.update(new_indexes)
+            update_client(client_id, {"page_count": new_page_count, "file_count": len(remaining_files)})
+        else:
+            update_client(client_id, {"documents_uploaded": False, "page_count": 0, "file_count": 0})
+        return jsonify({"success": True, "message": f"'{filename}' deleted. Freed {removed_pages} page(s)."})
+    except Exception as e:
+        print(f"Delete error [{client_id}]: {e}")
+        return jsonify({"error": "Delete failed."}), 500
 
 
 @app.route("/dashboard/add-admin", methods=["POST"])
