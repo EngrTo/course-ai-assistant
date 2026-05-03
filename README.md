@@ -1,80 +1,127 @@
-# Course Q&A AI Agent
+# AI Assistant SaaS Platform
 
-AI-powered chatbot that answers student questions based on course materials. Built with LangChain, ChromaDB, OpenAI, and Flask.
+Multi-tenant AI chatbot platform with self-service signup, Stripe subscriptions, and plan-based limits. Clients upload documents, get a custom AI chatbot widget for their website.
 
-## Quick Start
+**Live:** https://course-ai-assistant.onrender.com
 
-### 1. Set up environment
+## Features
+
+### Plans & Limits
+| Feature | Starter ($97/mo) | Professional ($197/mo) | Enterprise ($497/mo) |
+|---------|:-:|:-:|:-:|
+| Files | 5 | 20 | Unlimited |
+| Pages | 50 | 200 | Unlimited |
+| Custom Branding | ❌ | ✅ | ✅ |
+| API Access | ❌ | ❌ | ✅ |
+| Prorated Upgrades | ✅ | ✅ | — |
+
+### Core Features
+- **Self-service signup** — Stripe checkout → set password → dashboard
+- **Unified auth** — Single login for admins and clients
+- **Document upload** — PDF & TXT with page counting and limits
+- **File management** — Upload, replace (same filename), delete
+- **Custom branding** — Bot name, welcome message, primary color (Professional+)
+- **API access** — REST API with Bearer token auth (Enterprise)
+- **Embeddable widget** — `<script>` tag with branding support
+- **Prorated upgrades** — Stripe handles billing automatically
+- **Admin dashboard** — Client management, MRR tracking, multi-admin support
+- **Forgot password** — Gmail SMTP password reset flow
+
+## Tech Stack
+
+- **Backend:** Python/Flask
+- **Database:** PostgreSQL (Render) / SQLite (local dev)
+- **AI:** Groq (llama-3.1-8b-instant) + TF-IDF retrieval
+- **Payments:** Stripe (subscriptions, webhooks, proration)
+- **Email:** Gmail SMTP (password resets)
+- **Hosting:** Render (auto-deploy from GitHub)
+
+## Quick Start (Local)
 
 ```bash
 cd course-qa-agent
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 2. Add your OpenAI API key
-
-```bash
-cp .env.example .env
-# Edit .env and replace sk-your-key-here with your actual key
-```
-
-> Get a key at: https://platform.openai.com/api-keys
-
-### 3. Add course documents
-
-Place `.pdf` or `.txt` files in the `documents/` folder. A sample course is included.
-
-### 4. Ingest documents
-
-```bash
-python ingest.py
-```
-
-This reads your documents, splits them into chunks, creates embeddings, and stores them in ChromaDB.
-
-### 5. Start the app
-
-```bash
+cp .env.example .env  # Fill in your keys
 python app.py
 ```
 
-Open http://localhost:5000 in your browser and start asking questions!
+Open http://localhost:5000
+
+## Environment Variables
+
+```env
+GROQ_API_KEY=gsk_...
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_PUBLISHABLE_KEY=pk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+SECRET_KEY=your-session-secret
+ADMIN_EMAIL=admin@example.com
+ADMIN_PASSWORD=your-admin-password
+GMAIL_EMAIL=your@gmail.com
+GMAIL_APP_PASSWORD=xxxx-xxxx-xxxx-xxxx
+DATABASE_URL=postgresql://...  # Omit for SQLite locally
+```
+
+Optional (auto-created if not set):
+```env
+STRIPE_PRICE_STARTER=price_xxx
+STRIPE_PRICE_PROFESSIONAL=price_xxx
+STRIPE_PRICE_ENTERPRISE=price_xxx
+```
 
 ## Project Structure
 
 ```
 course-qa-agent/
-├── .env.example        # API key template
-├── .gitignore          # Files to exclude from git
+├── app.py              # Flask server — all routes
+├── database.py         # PostgreSQL/SQLite dual-mode DB layer
+├── agent.py            # RAG agent (Groq + TF-IDF)
+├── ingest.py           # Document ingestion pipeline
 ├── requirements.txt    # Python dependencies
-├── ingest.py           # Document ingestion → vector DB
-├── agent.py            # RAG agent logic
-├── app.py              # Flask web server
-├── documents/          # Put course PDFs/text files here
-│   └── sample-course.txt
-├── chroma_db/          # Vector database (auto-created)
-└── templates/
-    └── index.html      # Chat UI
+├── static/
+│   └── widget.js       # Embeddable chat widget
+├── templates/
+│   ├── landing.html    # Public pricing page
+│   ├── login.html      # Unified login
+│   ├── dashboard.html  # Role-based dashboard
+│   ├── index.html      # Chat page (with branding)
+│   ├── set_password.html
+│   ├── forgot_password.html
+│   └── reset_password.html
+└── clients/            # Per-client documents & indexes
+    └── <client_id>/
+        └── documents/
 ```
 
-## How It Works
+## API (Enterprise)
 
-1. **Ingest:** Documents are split into chunks and converted to embeddings (numerical representations)
-2. **Store:** Embeddings are stored in ChromaDB (a vector database)
-3. **Query:** When a user asks a question, it's converted to an embedding and matched against stored chunks
-4. **Answer:** The top matching chunks + the question are sent to GPT-4o-mini, which generates an accurate answer
+```bash
+curl -X POST https://course-ai-assistant.onrender.com/api/v1/<client_id>/ask \
+  -H "Authorization: Bearer ak_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "How do I get started?"}'
+```
 
-## Costs
+Response:
+```json
+{"answer": "To get started...", "client_id": "your-business"}
+```
 
-- **OpenAI API:** ~$0.01-0.05 per conversation (GPT-4o-mini is very cheap)
-- **Embeddings:** ~$0.001 per document ingestion
-- **Hosting:** Free locally, $5-7/mo on Railway or Render
+## Stripe Webhooks
 
-## Customization
+Endpoint: `/webhook/stripe`
 
-- Change the LLM model in `agent.py` (line with `model=`)
-- Adjust chunk size in `ingest.py` for longer/shorter context
-- Modify the UI in `templates/index.html`
-- Add system prompts to customize the agent's personality
+Required events:
+- `checkout.session.completed` — New signup or upgrade
+- `customer.subscription.deleted` — Cancellation
+- `invoice.payment_failed` — Mark as past due
+- `customer.subscription.updated` — Plan changes
+
+## Deployment (Render)
+
+1. Push to GitHub (auto-deploys)
+2. Set environment variables on Render
+3. Configure Stripe webhook endpoint
+4. Add required webhook events
