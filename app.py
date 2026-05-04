@@ -791,6 +791,16 @@ def payment_success():
         plan = checkout.metadata["plan"] if "plan" in checkout.metadata else "starter"
 
         client = create_client(email, business_name, plan, session_id)
+
+        # Store Stripe customer and subscription IDs
+        stripe_customer_id = checkout.customer or ""
+        stripe_subscription_id = checkout.subscription or ""
+        if stripe_customer_id or stripe_subscription_id:
+            update_client(client["client_id"], {
+                "stripe_customer_id": stripe_customer_id,
+                "stripe_subscription_id": stripe_subscription_id,
+            })
+
         print(f"Client provisioned: {client['client_id']} for {email}")
         return redirect(f"/set-password?token={client['access_token']}")
     except Exception as e:
