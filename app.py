@@ -320,6 +320,8 @@ def dashboard():
         data["uploaded_files"] = sorted([f for f in os.listdir(docs_dir) if f.endswith((".pdf", ".txt"))]) if os.path.exists(docs_dir) else []
         # Analytics
         data["chat_stats"] = get_chat_stats(client["client_id"])
+        from datetime import datetime
+        data["now_weekday"] = datetime.utcnow().strftime("%a")
 
     return render_template("dashboard.html", **data)
 

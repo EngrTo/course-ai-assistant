@@ -89,28 +89,57 @@
         <!-- Analytics -->
         <div class="section">
             <h3>📈 Usage Analytics</h3>
-            <!-- Filter Controls -->
-            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0;">
-                <button onclick="filterStats('today')" class="filter-btn" id="filter-today">Today</button>
-                <button onclick="filterStats('week')" class="filter-btn" id="filter-week">This Week</button>
-                <button onclick="filterStats('month')" class="filter-btn active" id="filter-month">This Month</button>
-                <button onclick="filterStats('all')" class="filter-btn" id="filter-all">All Time</button>
-                <span style="color:#999;margin:0 4px;">|</span>
-                <label style="font-size:12px;color:#666;">From</label>
-                <input type="date" id="filter-start" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-                <label style="font-size:12px;color:#666;">To</label>
-                <input type="date" id="filter-end" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
-                <button onclick="filterStats('custom')" class="filter-btn" id="filter-custom">Apply</button>
+            <!-- Date Picker Field -->
+            <div style="position:relative;margin:12px 0;">
+                <div id="date-picker-field" onclick="toggleCalendar()" style="display:flex;align-items:center;justify-content:space-between;border:1px solid #e2e8f0;border-radius:10px;padding:10px 16px;cursor:pointer;user-select:none;background:#fff;">
+                    <span onclick="event.stopPropagation();shiftPeriod(-1)" style="font-size:18px;color:#666;padding:0 8px;cursor:pointer;">‹</span>
+                    <span style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;">
+                        📅 <span id="date-display">Today · {{ now_weekday }}</span>
+                    </span>
+                    <span onclick="event.stopPropagation();shiftPeriod(1)" style="font-size:18px;color:#666;padding:0 8px;cursor:pointer;">›</span>
+                </div>
+
+                <!-- Calendar Dropdown -->
+                <div id="calendar-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;margin-top:6px;background:#fff;border:1px solid #e2e8f0;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.12);z-index:100;padding:16px;max-width:420px;">
+                    <div style="display:flex;gap:16px;">
+                        <!-- Quick Options -->
+                        <div style="min-width:110px;border-right:1px solid #f1f5f9;padding-right:16px;">
+                            <div class="cal-quick active" data-period="today" onclick="quickSelect('today')">Today</div>
+                            <div class="cal-quick" data-period="yesterday" onclick="quickSelect('yesterday')">Yesterday</div>
+                            <div class="cal-quick" data-period="week" onclick="quickSelect('week')">This Week</div>
+                            <div class="cal-quick" data-period="last-week" onclick="quickSelect('last-week')">Last Week</div>
+                            <div class="cal-quick" data-period="month" onclick="quickSelect('month')">This Month</div>
+                            <div class="cal-quick" data-period="last-month" onclick="quickSelect('last-month')">Last Month</div>
+                            <div class="cal-quick" data-period="all" onclick="quickSelect('all')">All Time</div>
+                        </div>
+                        <!-- Calendar -->
+                        <div style="flex:1;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+                                <span onclick="changeMonth(-1)" style="cursor:pointer;font-size:18px;color:#666;padding:4px 8px;">‹</span>
+                                <strong id="cal-month-year" style="font-size:14px;"></strong>
+                                <span onclick="changeMonth(1)" style="cursor:pointer;font-size:18px;color:#666;padding:4px 8px;">›</span>
+                            </div>
+                            <div id="cal-grid" style="display:grid;grid-template-columns:repeat(7,1fr);gap:2px;text-align:center;font-size:12px;"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
             <style>
-                .filter-btn { padding:6px 14px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; cursor:pointer; font-size:13px; transition:all .2s; }
-                .filter-btn:hover { background:#f1f5f9; }
-                .filter-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+                .cal-quick { padding:6px 10px; border-radius:6px; font-size:13px; cursor:pointer; margin-bottom:2px; color:#555; }
+                .cal-quick:hover { background:#f1f5f9; }
+                .cal-quick.active { background:#4f46e5; color:#fff; }
+                .cal-day { width:32px; height:32px; line-height:32px; border-radius:50%; cursor:pointer; margin:auto; }
+                .cal-day:hover { background:#e0e7ff; }
+                .cal-day.today { border:2px solid #4f46e5; }
+                .cal-day.selected { background:#4f46e5; color:#fff; }
+                .cal-day.in-range { background:#e0e7ff; }
+                .cal-day.disabled { color:#ccc; cursor:default; }
+                .cal-header { font-weight:600; color:#999; font-size:11px; padding:4px 0; }
             </style>
             <!-- Stats Display -->
             <div style="background:#f8fafc;border-radius:10px;padding:24px;text-align:center;margin-top:8px;">
-                <div id="stats-count" style="font-size:36px;font-weight:700;color:#4f46e5;">{{ chat_stats.this_month }}</div>
-                <div id="stats-label" style="color:#666;margin-top:4px;font-size:14px;">Queries This Month</div>
+                <div id="stats-count" style="font-size:36px;font-weight:700;color:#4f46e5;">{{ chat_stats.today }}</div>
+                <div id="stats-label" style="color:#666;margin-top:4px;font-size:14px;">Queries Today</div>
             </div>
             <!-- Quick overview row -->
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;">
@@ -488,51 +517,191 @@
             }
         }
 
-        // Analytics filter
-        async function filterStats(period) {
-            // Remove active class from all buttons
-            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        // Analytics Calendar
+        let calendarOpen = false;
+        let calViewDate = new Date();
+        let calStartDate = null;
+        let calEndDate = null;
+        let currentPeriod = 'today';
+        const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+        const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
+        function fmt(d) { return d.toISOString().split('T')[0]; }
+        function dayName(d) { return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]; }
+
+        function toggleCalendar() {
+            calendarOpen = !calendarOpen;
+            document.getElementById('calendar-dropdown').style.display = calendarOpen ? 'block' : 'none';
+            if (calendarOpen) renderCalendar();
+        }
+
+        document.addEventListener('click', function(e) {
+            const picker = document.getElementById('date-picker-field');
+            const dropdown = document.getElementById('calendar-dropdown');
+            if (!picker.contains(e.target) && !dropdown.contains(e.target)) {
+                calendarOpen = false;
+                dropdown.style.display = 'none';
+            }
+        });
+
+        function changeMonth(dir) {
+            calViewDate.setMonth(calViewDate.getMonth() + dir);
+            renderCalendar();
+        }
+
+        function renderCalendar() {
+            const year = calViewDate.getFullYear();
+            const month = calViewDate.getMonth();
+            document.getElementById('cal-month-year').textContent = `${MONTHS[month]} ${year}`;
+
+            const grid = document.getElementById('cal-grid');
+            let html = DAYS.map(d => `<div class="cal-header">${d}</div>`).join('');
+
+            const firstDay = new Date(year, month, 1);
+            let startDow = firstDay.getDay() - 1; // Monday=0
+            if (startDow < 0) startDow = 6;
+
+            const daysInMonth = new Date(year, month + 1, 0).getDate();
+            const today = new Date(); today.setHours(0,0,0,0);
+
+            for (let i = 0; i < startDow; i++) html += '<div></div>';
+
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = new Date(year, month, day);
+                date.setHours(0,0,0,0);
+                const dateStr = fmt(date);
+                let cls = 'cal-day';
+                if (date.getTime() === today.getTime()) cls += ' today';
+                if (calStartDate && dateStr === fmt(calStartDate)) cls += ' selected';
+                if (calEndDate && dateStr === fmt(calEndDate)) cls += ' selected';
+                if (calStartDate && calEndDate && date > calStartDate && date < calEndDate) cls += ' in-range';
+                if (date > today) cls += ' disabled';
+                html += `<div class="${cls}" onclick="selectDate(new Date(${year},${month},${day}))">${day}</div>`;
+            }
+            grid.innerHTML = html;
+        }
+
+        function selectDate(date) {
+            date.setHours(0,0,0,0);
+            const today = new Date(); today.setHours(0,0,0,0);
+            if (date > today) return;
+
+            if (!calStartDate || (calStartDate && calEndDate) || date < calStartDate) {
+                calStartDate = date;
+                calEndDate = null;
+            } else {
+                calEndDate = date;
+                currentPeriod = 'custom';
+                updateDisplay();
+                fetchStats(fmt(calStartDate), fmt(calEndDate), `${fmt(calStartDate)} to ${fmt(calEndDate)}`);
+                calendarOpen = false;
+                document.getElementById('calendar-dropdown').style.display = 'none';
+            }
+            highlightQuick('');
+            renderCalendar();
+        }
+
+        function quickSelect(period) {
+            const today = new Date(); today.setHours(0,0,0,0);
             let start, end, label;
-            const today = new Date();
-            const fmt = d => d.toISOString().split('T')[0];
+            currentPeriod = period;
 
             if (period === 'today') {
-                start = end = fmt(today);
-                label = 'Queries Today';
-                document.getElementById('filter-today').classList.add('active');
+                start = end = new Date(today);
+                label = `Today · ${dayName(today)}`;
+            } else if (period === 'yesterday') {
+                start = end = new Date(today); start.setDate(start.getDate() - 1);
+                label = `Yesterday · ${dayName(start)}`;
             } else if (period === 'week') {
-                const weekAgo = new Date(today);
-                weekAgo.setDate(today.getDate() - 6);
-                start = fmt(weekAgo);
-                end = fmt(today);
-                label = 'Queries This Week';
-                document.getElementById('filter-week').classList.add('active');
+                start = new Date(today);
+                const dow = start.getDay() || 7;
+                start.setDate(start.getDate() - (dow - 1));
+                end = new Date(today);
+                label = `This Week · ${fmt(start).slice(5)} - ${fmt(end).slice(5)}`;
+            } else if (period === 'last-week') {
+                end = new Date(today);
+                const dow = end.getDay() || 7;
+                end.setDate(end.getDate() - dow);
+                start = new Date(end);
+                start.setDate(start.getDate() - 6);
+                label = `Last Week · ${fmt(start).slice(5)} - ${fmt(end).slice(5)}`;
             } else if (period === 'month') {
-                start = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
-                end = fmt(today);
-                label = 'Queries This Month';
-                document.getElementById('filter-month').classList.add('active');
+                start = new Date(today.getFullYear(), today.getMonth(), 1);
+                end = new Date(today);
+                label = `This Month · ${MONTHS[today.getMonth()]}`;
+            } else if (period === 'last-month') {
+                start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+                end = new Date(today.getFullYear(), today.getMonth(), 0);
+                label = `Last Month · ${MONTHS[start.getMonth()]}`;
             } else if (period === 'all') {
-                start = '2020-01-01';
-                end = fmt(today);
-                label = 'All Time Queries';
-                document.getElementById('filter-all').classList.add('active');
-            } else if (period === 'custom') {
-                start = document.getElementById('filter-start').value;
-                end = document.getElementById('filter-end').value;
-                if (!start || !end) { alert('Please select both start and end dates.'); return; }
-                if (start > end) { alert('Start date must be before end date.'); return; }
-                label = `Queries from ${start} to ${end}`;
-                document.getElementById('filter-custom').classList.add('active');
+                start = new Date(2020, 0, 1);
+                end = new Date(today);
+                label = 'All Time';
             }
 
+            calStartDate = start;
+            calEndDate = end;
+            highlightQuick(period);
+            updateDisplay();
+            fetchStats(fmt(start), fmt(end), label);
+            calendarOpen = false;
+            document.getElementById('calendar-dropdown').style.display = 'none';
+        }
+
+        function highlightQuick(period) {
+            document.querySelectorAll('.cal-quick').forEach(el => {
+                el.classList.toggle('active', el.dataset.period === period);
+            });
+        }
+
+        function updateDisplay() {
+            let text;
+            if (!calStartDate) {
+                text = `Today · ${dayName(new Date())}`;
+            } else if (!calEndDate || fmt(calStartDate) === fmt(calEndDate)) {
+                text = `${fmt(calStartDate).replace(/-/g, '/')}`;
+            } else {
+                text = `${fmt(calStartDate).replace(/-/g, '/')} - ${fmt(calEndDate).replace(/-/g, '/')}`;
+            }
+            document.getElementById('date-display').textContent = text;
+        }
+
+        function shiftPeriod(dir) {
+            const today = new Date(); today.setHours(0,0,0,0);
+            if (!calStartDate || !calEndDate) { quickSelect('today'); return; }
+
+            const diff = Math.round((calEndDate - calStartDate) / 86400000);
+            const shift = (diff + 1) * dir;
+            const newStart = new Date(calStartDate); newStart.setDate(newStart.getDate() + shift);
+            const newEnd = new Date(calEndDate); newEnd.setDate(newEnd.getDate() + shift);
+
+            if (newEnd > today) return; // don't go into future
+
+            calStartDate = newStart;
+            calEndDate = newEnd;
+            currentPeriod = 'custom';
+            highlightQuick('');
+            updateDisplay();
+            const label = fmt(calStartDate) === fmt(calEndDate) 
+                ? fmt(calStartDate) 
+                : `${fmt(calStartDate)} to ${fmt(calEndDate)}`;
+            fetchStats(fmt(calStartDate), fmt(calEndDate), label);
+        }
+
+        async function fetchStats(start, end, label) {
             const res = await fetch(`/dashboard/analytics?start=${start}&end=${end}`);
             const data = await res.json();
             if (data.error) { alert(data.error); return; }
             document.getElementById('stats-count').textContent = data.count;
             document.getElementById('stats-label').textContent = label;
         }
+
+        // Initialize: show today's stats on load
+        (function() {
+            const today = new Date(); today.setHours(0,0,0,0);
+            calStartDate = new Date(today);
+            calEndDate = new Date(today);
+        })();
 
         // Cancel subscription
         async function cancelSubscription() {
