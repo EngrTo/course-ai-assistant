@@ -511,7 +511,7 @@
         const DAYS = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
         const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
-        function fmt(d) { return d.toISOString().split('T')[0]; }
+        function fmt(d) { return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); }
         function dayName(d) { return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()]; }
 
         function toggleCalendar() {
