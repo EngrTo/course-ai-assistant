@@ -931,6 +931,11 @@ def payment_success():
         business_name = checkout.metadata["business_name"] if "business_name" in checkout.metadata else "Business"
         plan = checkout.metadata["plan"] if "plan" in checkout.metadata else "starter"
 
+        # Prevent duplicates (page refresh, webhook race)
+        existing = get_client_by_email(email)
+        if existing:
+            return redirect(f"/set-password?token={existing['access_token']}")
+
         client = create_client(email, business_name, plan, session_id)
 
         # Store Stripe customer and subscription IDs
