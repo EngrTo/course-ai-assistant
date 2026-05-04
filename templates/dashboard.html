@@ -608,27 +608,31 @@
             currentPeriod = period;
 
             if (period === 'today') {
-                start = end = new Date(today);
+                start = new Date(today);
+                end = new Date(today);
                 label = `Today · ${dayName(today)}`;
             } else if (period === 'yesterday') {
-                start = end = new Date(today); start.setDate(start.getDate() - 1);
+                start = new Date(today);
+                start.setDate(start.getDate() - 1);
+                end = new Date(start);
                 label = `Yesterday · ${dayName(start)}`;
             } else if (period === 'week') {
                 start = new Date(today);
                 const dow = start.getDay() || 7;
                 start.setDate(start.getDate() - (dow - 1));
-                end = new Date(today);
+                end = new Date(start);
+                end.setDate(end.getDate() + 6);
                 label = `This Week · ${fmt(start).slice(5)} - ${fmt(end).slice(5)}`;
             } else if (period === 'last-week') {
-                end = new Date(today);
-                const dow = end.getDay() || 7;
-                end.setDate(end.getDate() - dow);
-                start = new Date(end);
-                start.setDate(start.getDate() - 6);
+                start = new Date(today);
+                const dow = start.getDay() || 7;
+                start.setDate(start.getDate() - (dow - 1) - 7);
+                end = new Date(start);
+                end.setDate(end.getDate() + 6);
                 label = `Last Week · ${fmt(start).slice(5)} - ${fmt(end).slice(5)}`;
             } else if (period === 'month') {
                 start = new Date(today.getFullYear(), today.getMonth(), 1);
-                end = new Date(today);
+                end = new Date(today.getFullYear(), today.getMonth() + 1, 0);
                 label = `This Month · ${MONTHS[today.getMonth()]}`;
             } else if (period === 'last-month') {
                 start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
