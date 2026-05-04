@@ -261,10 +261,14 @@
         </div>
         {% endif %}
 
-        <!-- Cancel Subscription -->
+        <!-- Cancel / Resubscribe -->
         <div class="section" style="border-top:1px solid #fee2e2;padding-top:20px;">
-            {% if client.status == 'cancelling' %}
-            <p style="font-size:13px;color:#dc2626;">⚠️ Your subscription is set to cancel at the end of the current billing period. You retain full access until then.</p>
+            {% if client.status == 'cancelled' %}
+            <p style="font-size:13px;color:#dc2626;margin-bottom:12px;">❌ Your subscription has ended. Your chatbot is no longer active.</p>
+            <button class="btn" style="background:#16a34a;color:#fff;font-size:13px;" onclick="resubscribe()">🔄 Resubscribe — Resume My Plan</button>
+            {% elif client.status == 'cancelling' %}
+            <p style="font-size:13px;color:#dc2626;margin-bottom:12px;">⚠️ Your subscription is set to cancel at the end of the current billing period. You retain full access until then.</p>
+            <button class="btn" style="background:#2563eb;color:#fff;font-size:13px;" onclick="resubscribe()">↩️ Undo Cancellation — Keep My Subscription</button>
             {% else %}
             <details style="cursor:pointer;">
                 <summary style="font-size:13px;color:#666;">Cancel subscription</summary>
@@ -722,6 +726,28 @@
                     location.reload();
                 } else {
                     alert(data.error || 'Cancellation failed.');
+                }
+            } catch(e) {
+                alert('Network error: ' + e.message);
+            }
+        }
+
+        // Resubscribe
+        async function resubscribe() {
+            if (!confirm('Reactivate your subscription?')) return;
+            try {
+                const res = await fetch('/resubscribe', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                });
+                const data = await res.json();
+                if (data.success && data.url) {
+                    window.location.href = data.url;
+                } else if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert(data.error || 'Resubscription failed.');
                 }
             } catch(e) {
                 alert('Network error: ' + e.message);

@@ -550,6 +550,8 @@ def api_ask(client_id):
     client = get_client(client_id)
     if not client:
         return jsonify({"error": "Client not found."}), 404
+    if client.get("status") == "cancelled":
+        return jsonify({"error": "Subscription cancelled. API access disabled."}), 403
     if client.get("plan") != "enterprise":
         return jsonify({"error": "API access requires Enterprise plan."}), 403
     if not client.get("api_key") or client["api_key"] != api_key:
@@ -774,6 +776,75 @@ def cancel_subscription():
         return jsonify({"error": "Cancellation failed. Contact support."}), 500
 
 
+@app.route("/resubscribe", methods=["POST"])
+@login_required
+def resubscribe():
+    """Undo cancellation if still within billing period, or create new subscription if fully cancelled."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "Unauthorized."}), 403
+
+    client = user["client"]
+    status = client.get("status", "")
+    subscription_id = client.get("stripe_subscription_id")
+
+    if status == "cancelling" and subscription_id:
+        # Still within billing period — undo the cancellation
+        try:
+            stripe.Subscription.modify(subscription_id, cancel_at_period_end=False)
+            update_client(client["client_id"], {"status": "active"})
+            return jsonify({"success": True, "message": "Subscription reactivated! You won't be cancelled."})
+        except Exception as e:
+            print(f"Resubscribe error: {type(e).__name__}: {e}")
+            return jsonify({"error": "Failed to reactivate. Contact support."}), 500
+
+    elif status == "cancelled":
+        # Fully cancelled — create a new checkout session for same plan
+        plan = client.get("plan", "starter")
+        try:
+            price_id = STRIPE_PRICE_IDS.get(plan) or get_or_create_stripe_price(plan)
+            session = stripe.checkout.Session.create(
+                payment_method_types=["card"],
+                line_items=[{"price": price_id, "quantity": 1}],
+                mode="subscription",
+                success_url=request.host_url + f"resubscribe-success?session_id={{CHECKOUT_SESSION_ID}}&client_id={client['client_id']}",
+                cancel_url=request.host_url + "dashboard",
+                customer_email=client["email"],
+                metadata={"client_id": client["client_id"], "plan": plan},
+            )
+            return jsonify({"success": True, "url": session.url})
+        except Exception as e:
+            print(f"Resubscribe checkout error: {type(e).__name__}: {e}")
+            return jsonify({"error": "Failed to create checkout. Contact support."}), 500
+
+    else:
+        return jsonify({"error": "No cancellation to undo."}), 400
+
+
+@app.route("/resubscribe-success")
+@login_required
+def resubscribe_success():
+    """Handle successful resubscription payment."""
+    session_id = request.args.get("session_id")
+    client_id = request.args.get("client_id")
+    if not session_id or not client_id:
+        return "Missing parameters.", 400
+
+    try:
+        checkout = stripe.checkout.Session.retrieve(session_id)
+        stripe_customer_id = checkout.customer or ""
+        stripe_subscription_id = checkout.subscription or ""
+        update_client(client_id, {
+            "status": "active",
+            "stripe_customer_id": stripe_customer_id,
+            "stripe_subscription_id": stripe_subscription_id,
+        })
+        return redirect("/dashboard")
+    except Exception as e:
+        print(f"Resubscribe success error: {type(e).__name__}: {e}")
+        return redirect("/dashboard")
+
+
 @app.route("/payment-success")
 def payment_success():
     """Provision client after payment."""
@@ -919,6 +990,11 @@ def client_chat(client_id):
 def ask_question(client_id):
     if client_id not in indexes:
         return jsonify({"error": f"Client '{client_id}' not found"}), 404
+
+    # Block if subscription is cancelled
+    client = get_client(client_id)
+    if client and client.get("status") == "cancelled":
+        return jsonify({"error": "This chatbot is no longer active. The subscription has been cancelled."}), 403
 
     data = request.get_json()
     if not data:
