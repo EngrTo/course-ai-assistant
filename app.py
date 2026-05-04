@@ -14,6 +14,7 @@ from database import (
     get_client_by_email, set_client_password, verify_client_password,
     init_super_admin, verify_admin, get_admin, get_all_admins, get_all_clients,
     create_admin, delete_admin, set_reset_token, verify_reset_token, reset_password,
+    log_chat_query, get_chat_stats,
 )
 
 load_dotenv()
@@ -317,6 +318,8 @@ def dashboard():
         # List uploaded files
         docs_dir = os.path.join("clients", client["client_id"], "documents")
         data["uploaded_files"] = sorted([f for f in os.listdir(docs_dir) if f.endswith((".pdf", ".txt"))]) if os.path.exists(docs_dir) else []
+        # Analytics
+        data["chat_stats"] = get_chat_stats(client["client_id"])
 
     return render_template("dashboard.html", **data)
 
@@ -561,6 +564,7 @@ def api_ask(client_id):
         return jsonify({"error": "No documents indexed yet."}), 404
 
     answer = ask(question, client_id, indexes)
+    log_chat_query(client_id, question)
     return jsonify({"answer": answer, "client_id": client_id})
 
 
@@ -716,6 +720,33 @@ def upgrade_success():
     return redirect("/dashboard")
 
 
+@app.route("/cancel-subscription", methods=["POST"])
+@login_required
+def cancel_subscription():
+    """Cancel subscription at end of billing period."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "No subscription found."}), 403
+
+    client = user["client"]
+    subscription_id = client.get("stripe_subscription_id")
+
+    if not subscription_id:
+        return jsonify({"error": "No active subscription found. Contact support."}), 400
+
+    try:
+        # Cancel at period end — client keeps access until billing cycle ends
+        stripe.Subscription.modify(
+            subscription_id,
+            cancel_at_period_end=True,
+        )
+        update_client(client["client_id"], {"status": "cancelling"})
+        return jsonify({"success": True, "message": "Subscription will cancel at the end of your billing period. You'll retain access until then."})
+    except Exception as e:
+        print(f"Cancel error: {type(e).__name__}: {e}")
+        return jsonify({"error": "Cancellation failed. Contact support."}), 500
+
+
 @app.route("/payment-success")
 def payment_success():
     """Provision client after payment."""
@@ -864,6 +895,7 @@ def ask_question(client_id):
 
     try:
         result = ask(question, indexes[client_id], client_id)
+        log_chat_query(client_id, question)
         return jsonify(result)
     except Exception as e:
         print(f"Error [{client_id}]: {e}")

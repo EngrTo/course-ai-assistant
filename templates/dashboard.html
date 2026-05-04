@@ -86,6 +86,25 @@
             {% endif %}
         </div>
 
+        <!-- Analytics -->
+        <div class="section">
+            <h3>📈 Usage Analytics</h3>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px;">
+                <div style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="font-size:24px;font-weight:700;color:#16a34a;">{{ chat_stats.today }}</div>
+                    <small style="color:#666;">Today</small>
+                </div>
+                <div style="background:#eff6ff;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="font-size:24px;font-weight:700;color:#2563eb;">{{ chat_stats.this_month }}</div>
+                    <small style="color:#666;">This Month</small>
+                </div>
+                <div style="background:#f5f3ff;border-radius:8px;padding:16px;text-align:center;">
+                    <div style="font-size:24px;font-weight:700;color:#7c3aed;">{{ chat_stats.total }}</div>
+                    <small style="color:#666;">All Time</small>
+                </div>
+            </div>
+        </div>
+
         <!-- Upload Documents -->
         <div class="section">
             <h3>📄 Upload Documents</h3>
@@ -203,6 +222,21 @@
             {% endif %}
         </div>
         {% endif %}
+
+        <!-- Cancel Subscription -->
+        <div class="section" style="border-top:1px solid #fee2e2;padding-top:20px;">
+            {% if client.status == 'cancelling' %}
+            <p style="font-size:13px;color:#dc2626;">⚠️ Your subscription is set to cancel at the end of the current billing period. You retain full access until then.</p>
+            {% else %}
+            <details style="cursor:pointer;">
+                <summary style="font-size:13px;color:#666;">Cancel subscription</summary>
+                <div style="margin-top:12px;">
+                    <p style="font-size:13px;color:#666;margin-bottom:8px;">Your chatbot will stop working at the end of your billing period.</p>
+                    <button class="btn" style="background:#dc2626;color:#fff;font-size:12px;" onclick="cancelSubscription()">Cancel Subscription</button>
+                </div>
+            </details>
+            {% endif %}
+        </div>
 
         {% endif %}
 
@@ -427,6 +461,22 @@
                 window.location.href = data.url;
             } else {
                 alert(data.error || 'Failed');
+            }
+        }
+
+        // Cancel subscription
+        async function cancelSubscription() {
+            if (!confirm('Are you sure you want to cancel? Your chatbot will stop working at the end of the billing period.')) return;
+            const res = await fetch('/cancel-subscription', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert(data.error || 'Cancellation failed.');
             }
         }
 

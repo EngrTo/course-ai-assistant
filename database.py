@@ -99,6 +99,14 @@ def init_db():
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'AI Assistant'")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS welcome_message TEXT DEFAULT 'Hi! How can I help you today?'")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS api_key TEXT")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS chat_logs (
+                id SERIAL PRIMARY KEY,
+                client_id TEXT NOT NULL,
+                question TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
     else:
         cur.execute("""CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
@@ -131,6 +139,12 @@ def init_db():
             created_at TEXT,
             reset_token TEXT,
             reset_expires REAL
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS chat_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id TEXT NOT NULL,
+            question TEXT NOT NULL,
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
     conn.commit()
     cur.close()
@@ -436,3 +450,52 @@ def delete_admin(email: str) -> bool:
     cur.close()
     conn.close()
     return deleted
+
+
+# ── Chat Logs (Analytics) ────────────────────────────────────
+
+def log_chat_query(client_id: str, question: str):
+    """Log a chat question for analytics."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"INSERT INTO chat_logs (client_id, question, created_at) VALUES ({P}, {P}, {P})",
+        (client_id, question[:500], datetime.utcnow().isoformat())
+    )
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_chat_stats(client_id: str) -> dict:
+    """Get query counts for a client: today, this month, total."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    now = datetime.utcnow()
+    today_str = now.strftime("%Y-%m-%d")
+    month_str = now.strftime("%Y-%m")
+
+    # Total queries
+    cur.execute(f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P}", (client_id,))
+    row = cur.fetchone()
+    total = dict(row)["cnt"] if row else 0
+
+    # Today
+    if USE_PG:
+        cur.execute(f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at::text LIKE {P}", (client_id, f"{today_str}%"))
+    else:
+        cur.execute(f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at LIKE {P}", (client_id, f"{today_str}%"))
+    row = cur.fetchone()
+    today = dict(row)["cnt"] if row else 0
+
+    # This month
+    if USE_PG:
+        cur.execute(f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at::text LIKE {P}", (client_id, f"{month_str}%"))
+    else:
+        cur.execute(f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at LIKE {P}", (client_id, f"{month_str}%"))
+    row = cur.fetchone()
+    this_month = dict(row)["cnt"] if row else 0
+
+    cur.close()
+    conn.close()
+    return {"total": total, "today": today, "this_month": this_month}
