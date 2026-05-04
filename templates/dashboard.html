@@ -141,21 +141,6 @@
                 <div id="stats-count" style="font-size:36px;font-weight:700;color:#4f46e5;">{{ chat_stats.today }}</div>
                 <div id="stats-label" style="color:#666;margin-top:4px;font-size:14px;">Queries Today</div>
             </div>
-            <!-- Quick overview row -->
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;">
-                <div style="background:#f0fdf4;border-radius:8px;padding:12px;text-align:center;">
-                    <div style="font-size:18px;font-weight:700;color:#16a34a;">{{ chat_stats.today }}</div>
-                    <small style="color:#666;">Today</small>
-                </div>
-                <div style="background:#eff6ff;border-radius:8px;padding:12px;text-align:center;">
-                    <div style="font-size:18px;font-weight:700;color:#2563eb;">{{ chat_stats.this_month }}</div>
-                    <small style="color:#666;">This Month</small>
-                </div>
-                <div style="background:#f5f3ff;border-radius:8px;padding:12px;text-align:center;">
-                    <div style="font-size:18px;font-weight:700;color:#7c3aed;">{{ chat_stats.total }}</div>
-                    <small style="color:#666;">All Time</small>
-                </div>
-            </div>
         </div>
 
         <!-- Upload Documents -->
@@ -586,19 +571,31 @@
             const today = new Date(); today.setHours(0,0,0,0);
             if (date > today) return;
 
-            if (!calStartDate || (calStartDate && calEndDate) || date < calStartDate) {
+            if (!calStartDate || (calStartDate && calEndDate)) {
+                // First click: select single day, show stats immediately
                 calStartDate = date;
-                calEndDate = null;
-            } else {
-                calEndDate = date;
+                calEndDate = new Date(date);
                 currentPeriod = 'custom';
+                highlightQuick('');
+                updateDisplay();
+                fetchStats(fmt(date), fmt(date), `Queries on ${fmt(date)}`);
+                renderCalendar();
+            } else if (!calEndDate || date.getTime() !== calStartDate.getTime()) {
+                // Second click: extend to range
+                if (date < calStartDate) {
+                    calEndDate = new Date(calStartDate);
+                    calStartDate = date;
+                } else {
+                    calEndDate = date;
+                }
+                currentPeriod = 'custom';
+                highlightQuick('');
                 updateDisplay();
                 fetchStats(fmt(calStartDate), fmt(calEndDate), `${fmt(calStartDate)} to ${fmt(calEndDate)}`);
                 calendarOpen = false;
                 document.getElementById('calendar-dropdown').style.display = 'none';
+                renderCalendar();
             }
-            highlightQuick('');
-            renderCalendar();
         }
 
         function quickSelect(period) {
