@@ -711,16 +711,20 @@
         // Cancel subscription
         async function cancelSubscription() {
             if (!confirm('Are you sure you want to cancel? Your chatbot will stop working at the end of the billing period.')) return;
-            const res = await fetch('/cancel-subscription', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert(data.message);
-                location.reload();
-            } else {
-                alert(data.error || 'Cancellation failed.');
+            try {
+                const res = await fetch('/cancel-subscription', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                });
+                const data = await res.json();
+                if (data.success) {
+                    alert(data.message);
+                    location.reload();
+                } else {
+                    alert(data.error || 'Cancellation failed.');
+                }
+            } catch(e) {
+                alert('Network error: ' + e.message);
             }
         }
 
