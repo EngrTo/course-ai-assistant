@@ -566,21 +566,14 @@
             grid.innerHTML = html;
         }
 
+        let waitingForSecondClick = false;
+
         function selectDate(date) {
             date.setHours(0,0,0,0);
             const today = new Date(); today.setHours(0,0,0,0);
             if (date > today) return;
 
-            if (!calStartDate || (calStartDate && calEndDate)) {
-                // First click: select single day, show stats immediately
-                calStartDate = date;
-                calEndDate = new Date(date);
-                currentPeriod = 'custom';
-                highlightQuick('');
-                updateDisplay();
-                fetchStats(fmt(date), fmt(date), `Queries on ${fmt(date)}`);
-                renderCalendar();
-            } else if (!calEndDate || date.getTime() !== calStartDate.getTime()) {
+            if (waitingForSecondClick && date.getTime() !== calStartDate.getTime()) {
                 // Second click: extend to range
                 if (date < calStartDate) {
                     calEndDate = new Date(calStartDate);
@@ -588,12 +581,23 @@
                 } else {
                     calEndDate = date;
                 }
+                waitingForSecondClick = false;
                 currentPeriod = 'custom';
                 highlightQuick('');
                 updateDisplay();
                 fetchStats(fmt(calStartDate), fmt(calEndDate), `${fmt(calStartDate)} to ${fmt(calEndDate)}`);
                 calendarOpen = false;
                 document.getElementById('calendar-dropdown').style.display = 'none';
+                renderCalendar();
+            } else {
+                // First click: select single day, show stats immediately
+                calStartDate = date;
+                calEndDate = new Date(date);
+                waitingForSecondClick = true;
+                currentPeriod = 'custom';
+                highlightQuick('');
+                updateDisplay();
+                fetchStats(fmt(date), fmt(date), `Queries on ${fmt(date)}`);
                 renderCalendar();
             }
         }
