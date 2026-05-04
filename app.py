@@ -14,7 +14,7 @@ from database import (
     get_client_by_email, set_client_password, verify_client_password,
     init_super_admin, verify_admin, get_admin, get_all_admins, get_all_clients,
     create_admin, delete_admin, set_reset_token, verify_reset_token, reset_password,
-    log_chat_query, get_chat_stats,
+    log_chat_query, get_chat_stats, get_chat_stats_filtered,
 )
 
 load_dotenv()
@@ -718,6 +718,31 @@ def upgrade_success():
     if client_id and new_plan:
         update_client(client_id, {"plan": new_plan})
     return redirect("/dashboard")
+
+
+@app.route("/dashboard/analytics", methods=["GET"])
+@login_required
+def dashboard_analytics():
+    """Return filtered chat stats as JSON."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    client_id = user["client"]["client_id"]
+    start_date = request.args.get("start")
+    end_date = request.args.get("end")
+
+    if not start_date or not end_date:
+        return jsonify({"error": "start and end parameters required"}), 400
+
+    # Basic validation (YYYY-MM-DD)
+    import re
+    date_pattern = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+    if not date_pattern.match(start_date) or not date_pattern.match(end_date):
+        return jsonify({"error": "Invalid date format. Use YYYY-MM-DD."}), 400
+
+    stats = get_chat_stats_filtered(client_id, start_date, end_date)
+    return jsonify(stats)
 
 
 @app.route("/cancel-subscription", methods=["POST"])

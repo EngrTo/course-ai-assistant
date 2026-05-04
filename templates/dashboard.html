@@ -89,17 +89,41 @@
         <!-- Analytics -->
         <div class="section">
             <h3>📈 Usage Analytics</h3>
-            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:8px;">
-                <div style="background:#f0fdf4;border-radius:8px;padding:16px;text-align:center;">
-                    <div style="font-size:24px;font-weight:700;color:#16a34a;">{{ chat_stats.today }}</div>
+            <!-- Filter Controls -->
+            <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0;">
+                <button onclick="filterStats('today')" class="filter-btn" id="filter-today">Today</button>
+                <button onclick="filterStats('week')" class="filter-btn" id="filter-week">This Week</button>
+                <button onclick="filterStats('month')" class="filter-btn active" id="filter-month">This Month</button>
+                <button onclick="filterStats('all')" class="filter-btn" id="filter-all">All Time</button>
+                <span style="color:#999;margin:0 4px;">|</span>
+                <label style="font-size:12px;color:#666;">From</label>
+                <input type="date" id="filter-start" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <label style="font-size:12px;color:#666;">To</label>
+                <input type="date" id="filter-end" style="padding:4px 8px;border:1px solid #ddd;border-radius:6px;font-size:13px;">
+                <button onclick="filterStats('custom')" class="filter-btn" id="filter-custom">Apply</button>
+            </div>
+            <style>
+                .filter-btn { padding:6px 14px; border:1px solid #e2e8f0; border-radius:6px; background:#fff; cursor:pointer; font-size:13px; transition:all .2s; }
+                .filter-btn:hover { background:#f1f5f9; }
+                .filter-btn.active { background:#4f46e5; color:#fff; border-color:#4f46e5; }
+            </style>
+            <!-- Stats Display -->
+            <div style="background:#f8fafc;border-radius:10px;padding:24px;text-align:center;margin-top:8px;">
+                <div id="stats-count" style="font-size:36px;font-weight:700;color:#4f46e5;">{{ chat_stats.this_month }}</div>
+                <div id="stats-label" style="color:#666;margin-top:4px;font-size:14px;">Queries This Month</div>
+            </div>
+            <!-- Quick overview row -->
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px;">
+                <div style="background:#f0fdf4;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:18px;font-weight:700;color:#16a34a;">{{ chat_stats.today }}</div>
                     <small style="color:#666;">Today</small>
                 </div>
-                <div style="background:#eff6ff;border-radius:8px;padding:16px;text-align:center;">
-                    <div style="font-size:24px;font-weight:700;color:#2563eb;">{{ chat_stats.this_month }}</div>
+                <div style="background:#eff6ff;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:18px;font-weight:700;color:#2563eb;">{{ chat_stats.this_month }}</div>
                     <small style="color:#666;">This Month</small>
                 </div>
-                <div style="background:#f5f3ff;border-radius:8px;padding:16px;text-align:center;">
-                    <div style="font-size:24px;font-weight:700;color:#7c3aed;">{{ chat_stats.total }}</div>
+                <div style="background:#f5f3ff;border-radius:8px;padding:12px;text-align:center;">
+                    <div style="font-size:18px;font-weight:700;color:#7c3aed;">{{ chat_stats.total }}</div>
                     <small style="color:#666;">All Time</small>
                 </div>
             </div>
@@ -462,6 +486,52 @@
             } else {
                 alert(data.error || 'Failed');
             }
+        }
+
+        // Analytics filter
+        async function filterStats(period) {
+            // Remove active class from all buttons
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+
+            let start, end, label;
+            const today = new Date();
+            const fmt = d => d.toISOString().split('T')[0];
+
+            if (period === 'today') {
+                start = end = fmt(today);
+                label = 'Queries Today';
+                document.getElementById('filter-today').classList.add('active');
+            } else if (period === 'week') {
+                const weekAgo = new Date(today);
+                weekAgo.setDate(today.getDate() - 6);
+                start = fmt(weekAgo);
+                end = fmt(today);
+                label = 'Queries This Week';
+                document.getElementById('filter-week').classList.add('active');
+            } else if (period === 'month') {
+                start = fmt(new Date(today.getFullYear(), today.getMonth(), 1));
+                end = fmt(today);
+                label = 'Queries This Month';
+                document.getElementById('filter-month').classList.add('active');
+            } else if (period === 'all') {
+                start = '2020-01-01';
+                end = fmt(today);
+                label = 'All Time Queries';
+                document.getElementById('filter-all').classList.add('active');
+            } else if (period === 'custom') {
+                start = document.getElementById('filter-start').value;
+                end = document.getElementById('filter-end').value;
+                if (!start || !end) { alert('Please select both start and end dates.'); return; }
+                if (start > end) { alert('Start date must be before end date.'); return; }
+                label = `Queries from ${start} to ${end}`;
+                document.getElementById('filter-custom').classList.add('active');
+            }
+
+            const res = await fetch(`/dashboard/analytics?start=${start}&end=${end}`);
+            const data = await res.json();
+            if (data.error) { alert(data.error); return; }
+            document.getElementById('stats-count').textContent = data.count;
+            document.getElementById('stats-label').textContent = label;
         }
 
         // Cancel subscription

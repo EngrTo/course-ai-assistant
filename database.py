@@ -499,3 +499,26 @@ def get_chat_stats(client_id: str) -> dict:
     cur.close()
     conn.close()
     return {"total": total, "today": today, "this_month": this_month}
+
+
+def get_chat_stats_filtered(client_id: str, start_date: str, end_date: str) -> dict:
+    """Get query count for a client between start_date and end_date (YYYY-MM-DD)."""
+    conn = _get_conn()
+    cur = conn.cursor()
+
+    if USE_PG:
+        cur.execute(
+            f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at >= {P}::timestamp AND created_at < ({P}::date + 1)::timestamp",
+            (client_id, start_date, end_date),
+        )
+    else:
+        cur.execute(
+            f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at >= {P} AND created_at < date({P}, '+1 day')",
+            (client_id, start_date, end_date),
+        )
+    row = cur.fetchone()
+    count = dict(row)["cnt"] if row else 0
+
+    cur.close()
+    conn.close()
+    return {"count": count, "start_date": start_date, "end_date": end_date}
