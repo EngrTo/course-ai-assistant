@@ -104,9 +104,11 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 client_id TEXT NOT NULL,
                 question TEXT NOT NULL,
+                answer TEXT DEFAULT '',
                 created_at TIMESTAMP DEFAULT NOW()
             );
         """)
+        cur.execute("ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS answer TEXT DEFAULT ''")
     else:
         cur.execute("""CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
@@ -144,6 +146,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             client_id TEXT NOT NULL,
             question TEXT NOT NULL,
+            answer TEXT DEFAULT '',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
     conn.commit()
@@ -454,17 +457,31 @@ def delete_admin(email: str) -> bool:
 
 # ── Chat Logs (Analytics) ────────────────────────────────────
 
-def log_chat_query(client_id: str, question: str):
-    """Log a chat question for analytics."""
+def log_chat_query(client_id: str, question: str, answer: str = ""):
+    """Log a chat question and answer for analytics."""
     conn = _get_conn()
     cur = conn.cursor()
     cur.execute(
-        f"INSERT INTO chat_logs (client_id, question, created_at) VALUES ({P}, {P}, {P})",
-        (client_id, question[:500], datetime.utcnow().isoformat())
+        f"INSERT INTO chat_logs (client_id, question, answer, created_at) VALUES ({P}, {P}, {P}, {P})",
+        (client_id, question[:500], answer[:2000], datetime.utcnow().isoformat())
     )
     conn.commit()
     cur.close()
     conn.close()
+
+
+def get_chat_history(client_id: str, limit: int = 50, offset: int = 0) -> list:
+    """Get recent conversation history for a client."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        f"SELECT id, question, answer, created_at FROM chat_logs WHERE client_id = {P} ORDER BY created_at DESC LIMIT {P} OFFSET {P}",
+        (client_id, limit, offset)
+    )
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
 
 
 def get_chat_stats(client_id: str) -> dict:

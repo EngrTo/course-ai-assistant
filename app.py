@@ -14,7 +14,7 @@ from database import (
     get_client_by_email, set_client_password, verify_client_password,
     init_super_admin, verify_admin, get_admin, get_all_admins, get_all_clients,
     create_admin, delete_admin, set_reset_token, verify_reset_token, reset_password,
-    log_chat_query, get_chat_stats, get_chat_stats_filtered,
+    log_chat_query, get_chat_stats, get_chat_stats_filtered, get_chat_history,
 )
 
 load_dotenv()
@@ -233,6 +233,56 @@ def send_reset_email(to_email: str, reset_url: str):
         return True
     except Exception as e:
         print(f"Email error: {e}")
+        return False
+
+
+def send_welcome_email(to_email: str, business_name: str, login_url: str):
+    """Send welcome/onboarding email to new clients."""
+    if not GMAIL_EMAIL or not GMAIL_APP_PASSWORD:
+        print(f"[DEV] Welcome email for {to_email}: {login_url}")
+        return True
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Welcome to AI Assistant Platform — {business_name} is live! 🚀"
+    msg["From"] = GMAIL_EMAIL
+    msg["To"] = to_email
+
+    html = f"""\
+    <div style="font-family:sans-serif;max-width:560px;margin:0 auto;padding:32px;background:#fff;">
+        <h2 style="color:#4f46e5;">Welcome aboard, {business_name}! 🎉</h2>
+        <p>Your AI chatbot is almost ready. Here's how to get started:</p>
+        <div style="background:#f8fafc;border-radius:10px;padding:20px;margin:16px 0;">
+            <ol style="margin:0;padding-left:20px;line-height:2;">
+                <li><strong>Set your password</strong> using the link you just received</li>
+                <li><strong>Upload documents</strong> (PDFs or text files) for your AI to learn from</li>
+                <li><strong>Copy your widget code</strong> and paste it on your website</li>
+                <li><strong>Customize</strong> your chatbot's name, color, and welcome message</li>
+            </ol>
+        </div>
+        <a href="{login_url}" style="display:inline-block;padding:14px 28px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Go to Dashboard →</a>
+        <hr style="border:none;border-top:1px solid #eee;margin:24px 0;">
+        <p style="font-size:13px;color:#666;"><strong>Quick tips:</strong></p>
+        <ul style="font-size:13px;color:#666;line-height:1.8;">
+            <li>The more documents you upload, the smarter your chatbot becomes</li>
+            <li>Check your <strong>Usage Analytics</strong> to see what customers are asking</li>
+            <li>Use the <strong>Conversation History</strong> to spot content gaps</li>
+        </ul>
+        <p style="font-size:12px;color:#999;margin-top:24px;">Need help? Reply to this email and we'll get back to you.</p>
+    </div>
+    """
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_EMAIL, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_EMAIL, to_email, msg.as_string())
+        print(f"Welcome email sent to {to_email}")
+        return True
+    except Exception as e:
+        print(f"Welcome email error: {e}")
         return False
 
 
@@ -568,7 +618,7 @@ def api_ask(client_id):
         return jsonify({"error": "No documents indexed yet."}), 404
 
     answer = ask(question, client_id, indexes)
-    log_chat_query(client_id, question)
+    log_chat_query(client_id, question, answer if isinstance(answer, str) else answer.get("answer", ""))
     return jsonify({"answer": answer, "client_id": client_id})
 
 
@@ -648,7 +698,10 @@ def create_checkout():
             success_url=request.url_root.replace("http://", "https://") + "payment-success?session_id={CHECKOUT_SESSION_ID}",
             cancel_url=request.url_root.replace("http://", "https://"),
             customer_email=email,
-            subscription_data={"metadata": {"business_name": business_name, "plan": plan}},
+            subscription_data={
+                "trial_period_days": 7,
+                "metadata": {"business_name": business_name, "plan": plan},
+            },
             metadata={"business_name": business_name, "plan": plan},
         )
         return jsonify({"url": checkout_session.url})
@@ -747,6 +800,23 @@ def dashboard_analytics():
 
     stats = get_chat_stats_filtered(client_id, start_date, end_date)
     return jsonify(stats)
+
+
+@app.route("/dashboard/conversations", methods=["GET"])
+@login_required
+def dashboard_conversations():
+    """Return recent conversation history as JSON."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "Unauthorized"}), 403
+
+    client_id = user["client"]["client_id"]
+    page = int(request.args.get("page", 1))
+    limit = 20
+    offset = (page - 1) * limit
+
+    history = get_chat_history(client_id, limit=limit, offset=offset)
+    return jsonify({"conversations": history, "page": page, "has_more": len(history) == limit})
 
 
 @app.route("/cancel-subscription", methods=["POST"])
@@ -873,6 +943,11 @@ def payment_success():
             })
 
         print(f"Client provisioned: {client['client_id']} for {email}")
+
+        # Send welcome email
+        login_url = request.url_root.replace("http://", "https://") + "login"
+        send_welcome_email(email, business_name, login_url)
+
         return redirect(f"/set-password?token={client['access_token']}")
     except Exception as e:
         print(f"Payment success error: {type(e).__name__}: {e}")
@@ -1008,7 +1083,8 @@ def ask_question(client_id):
 
     try:
         result = ask(question, indexes[client_id], client_id)
-        log_chat_query(client_id, question)
+        answer_text = result.get("answer", "") if isinstance(result, dict) else str(result)
+        log_chat_query(client_id, question, answer_text)
         return jsonify(result)
     except Exception as e:
         print(f"Error [{client_id}]: {e}")
