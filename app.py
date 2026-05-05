@@ -23,6 +23,14 @@ app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
 CORS(app)
 
+
+@app.errorhandler(500)
+def handle_500(e):
+    if request.content_type and "json" in request.content_type:
+        return jsonify({"error": "Internal server error"}), 500
+    return "Internal Server Error", 500
+
+
 # Initialize database tables and super admin
 init_db()
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "toskicve@gmail.com")
@@ -253,6 +261,8 @@ def signup():
             "status": "trial",
         })
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         print(f"Signup error: {type(e).__name__}: {e}")
         return jsonify({"error": "Account creation failed. Please try again."}), 500
 
