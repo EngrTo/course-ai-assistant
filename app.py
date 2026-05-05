@@ -240,21 +240,28 @@ def signup():
 
     # Create trial client
     from datetime import datetime, timedelta
-    client = create_client(email, business_name, "trial", "")
-    trial_expires = (datetime.utcnow() + timedelta(days=7)).isoformat()
-    verification_token = secrets.token_urlsafe(32)
+    try:
+        client = create_client(email, business_name, "trial", "")
+        trial_expires = (datetime.utcnow() + timedelta(days=7)).isoformat()
+        verification_token = secrets.token_urlsafe(32)
 
-    set_client_password(email, password)
-    update_client(client["client_id"], {
-        "trial_expires": trial_expires,
-        "verification_token": verification_token,
-        "email_verified": False,
-        "status": "trial",
-    })
+        set_client_password(email, password)
+        update_client(client["client_id"], {
+            "trial_expires": trial_expires,
+            "verification_token": verification_token,
+            "email_verified": False,
+            "status": "trial",
+        })
+    except Exception as e:
+        print(f"Signup error: {type(e).__name__}: {e}")
+        return jsonify({"error": "Account creation failed. Please try again."}), 500
 
-    # Send verification email
-    verify_url = request.url_root.replace("http://", "https://") + f"verify-email?token={verification_token}"
-    send_verification_email(email, business_name, verify_url)
+    # Send verification email (non-blocking — don't fail signup if email fails)
+    try:
+        verify_url = request.url_root.replace("http://", "https://") + f"verify-email?token={verification_token}"
+        send_verification_email(email, business_name, verify_url)
+    except Exception as e:
+        print(f"Verification email error: {type(e).__name__}: {e}")
 
     return jsonify({"success": True, "message": "Account created! Check your email to verify."})
 
