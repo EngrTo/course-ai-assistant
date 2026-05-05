@@ -495,6 +495,7 @@ def dashboard_upload():
 
         replaced_msg = f" ({len(replaced_names)} replaced)" if replaced_names else ""
         return jsonify({"success": True, "message": f"{saved} file(s) uploaded and processed! ({total_new_pages} pages){replaced_msg}"})
+    except Exception as e:
         print(f"Ingest error [{client_id}]: {e}")
         return jsonify({"error": "Processing failed. We'll fix this shortly."}), 500
 
