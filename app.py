@@ -329,7 +329,7 @@ def send_verification_email(to_email: str, business_name: str, verify_url: str):
     msg.attach(MIMEText(html, "html"))
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
             server.login(GMAIL_EMAIL, GMAIL_APP_PASSWORD)
             server.sendmail(GMAIL_EMAIL, to_email, msg.as_string())
         return True
@@ -365,7 +365,7 @@ def send_reset_email(to_email: str, reset_url: str):
     msg.attach(MIMEText(html, "html"))
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
             server.login(GMAIL_EMAIL, GMAIL_APP_PASSWORD)
             server.sendmail(GMAIL_EMAIL, to_email, msg.as_string())
         return True
@@ -414,7 +414,7 @@ def send_welcome_email(to_email: str, business_name: str, login_url: str):
     msg.attach(MIMEText(html, "html"))
 
     try:
-        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=10) as server:
             server.login(GMAIL_EMAIL, GMAIL_APP_PASSWORD)
             server.sendmail(GMAIL_EMAIL, to_email, msg.as_string())
         print(f"Welcome email sent to {to_email}")
