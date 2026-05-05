@@ -223,7 +223,8 @@
                 removeTyping();
 
                 if (!res.ok) {
-                    addMessage('Sorry, something went wrong. Please try again.', 'bot');
+                    const errData = await res.json().catch(() => null);
+                    addMessage(errData?.error || 'Sorry, something went wrong. Please try again.', 'bot');
                     return;
                 }
 
