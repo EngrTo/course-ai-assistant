@@ -259,8 +259,25 @@
         </div>
         {% endif %}
 
+        <!-- Trial Status Banner -->
+        {% if client.plan == 'trial' %}
+        <div class="section" style="background:linear-gradient(135deg,#ecfdf5,#f0fdf4);border:1px solid #86efac;border-radius:12px;">
+            <h3>🆓 Free Trial</h3>
+            <p style="font-size:13px;color:#555;margin-bottom:8px;">You're on a 7-day free trial with 10 queries/day.</p>
+            {% if trial_days_left is defined and trial_days_left > 0 %}
+            <p style="font-size:14px;font-weight:600;color:#059669;">{{ trial_days_left }} day{{ 's' if trial_days_left != 1 }} remaining</p>
+            {% elif trial_days_left is defined and trial_days_left <= 0 %}
+            <p style="font-size:14px;font-weight:600;color:#dc2626;">Trial expired</p>
+            {% endif %}
+            {% if daily_queries_used is defined %}
+            <p style="font-size:13px;color:#666;margin-top:4px;">Queries today: {{ daily_queries_used }}/10</p>
+            {% endif %}
+            <button class="btn btn-primary" style="margin-top:12px;" onclick="subscribePlan('starter')">🚀 Subscribe Now — From $97/mo</button>
+        </div>
+        {% endif %}
+
         <!-- Upgrade Plan -->
-        {% if client.plan != 'enterprise' %}
+        {% if client.plan != 'enterprise' and client.plan != 'trial' %}
         <div class="section">
             <h3>⬆️ Upgrade Plan</h3>
             <p style="font-size:13px;color:#666;margin-bottom:12px;">Get more features with a higher plan.</p>
@@ -516,6 +533,17 @@
             } else {
                 alert(data.error || 'Failed');
             }
+        }
+
+        async function subscribePlan(plan) {
+            const res = await fetch('/checkout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ plan, email: '{{ client.email if client else "" }}', business_name: '{{ client.business_name if client else "" }}' }),
+            });
+            const data = await res.json();
+            if (data.url) window.location.href = data.url;
+            else alert(data.error || 'Failed to start checkout');
         }
 
         // Analytics Calendar

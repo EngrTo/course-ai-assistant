@@ -14,7 +14,7 @@ from database import (
     get_client_by_email, set_client_password, verify_client_password,
     init_super_admin, verify_admin, get_admin, get_all_admins, get_all_clients,
     create_admin, delete_admin, set_reset_token, verify_reset_token, reset_password,
-    log_chat_query, get_chat_stats, get_chat_stats_filtered, get_chat_history,
+    log_chat_query, get_chat_stats, get_chat_stats_filtered, get_chat_history, get_daily_query_count,
 )
 
 load_dotenv()
@@ -45,9 +45,10 @@ PLAN_PRICES = {
 }
 
 PLAN_LIMITS = {
-    "starter": {"max_files": 5, "max_pages": 50},
-    "professional": {"max_files": 20, "max_pages": 200},
-    "enterprise": {"max_files": 999, "max_pages": 9999},
+    "trial": {"max_files": 1, "max_pages": 10, "max_queries_per_day": 10},
+    "starter": {"max_files": 5, "max_pages": 50, "max_queries_per_day": 9999},
+    "professional": {"max_files": 20, "max_pages": 200, "max_queries_per_day": 9999},
+    "enterprise": {"max_files": 999, "max_pages": 9999, "max_queries_per_day": 9999},
 }
 
 # Stripe Price IDs — set via env vars or auto-created
@@ -210,6 +211,114 @@ def set_password():
     set_client_password(email, password)
     flask_session["user_email"] = email
     return jsonify({"success": True})
+
+
+# ── Free Signup + Email Verification ─────────────────────────
+
+@app.route("/signup", methods=["GET", "POST"])
+def signup():
+    """Free signup — creates trial account, sends verification email."""
+    if request.method == "GET":
+        return render_template("signup.html")
+
+    data = request.get_json()
+    email = data.get("email", "").strip().lower()
+    business_name = data.get("business_name", "").strip()
+    password = data.get("password", "")
+
+    if not email or not business_name or not password:
+        return jsonify({"error": "All fields are required."}), 400
+    import re
+    if not re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email):
+        return jsonify({"error": "Please enter a valid email address."}), 400
+    if len(password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters."}), 400
+
+    existing = get_client_by_email(email)
+    if existing:
+        return jsonify({"error": "This email already has an account. Please log in."}), 400
+
+    # Create trial client
+    from datetime import datetime, timedelta
+    client = create_client(email, business_name, "trial", "")
+    trial_expires = (datetime.utcnow() + timedelta(days=7)).isoformat()
+    verification_token = secrets.token_urlsafe(32)
+
+    set_client_password(email, password)
+    update_client(client["client_id"], {
+        "trial_expires": trial_expires,
+        "verification_token": verification_token,
+        "email_verified": False,
+        "status": "trial",
+    })
+
+    # Send verification email
+    verify_url = request.url_root.replace("http://", "https://") + f"verify-email?token={verification_token}"
+    send_verification_email(email, business_name, verify_url)
+
+    return jsonify({"success": True, "message": "Account created! Check your email to verify."})
+
+
+@app.route("/verify-email")
+def verify_email():
+    """Verify email via token link."""
+    token = request.args.get("token")
+    if not token:
+        return "Invalid link.", 400
+
+    # Find client by verification token
+    from database import _get_conn, P, USE_PG
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM clients WHERE verification_token = {P}", (token,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+
+    if not row:
+        return "Invalid or expired verification link.", 400
+
+    client = dict(row)
+    update_client(client["client_id"], {"email_verified": True, "verification_token": None})
+
+    # Auto-login and redirect to dashboard
+    flask_session["user_email"] = client["email"]
+    return redirect("/dashboard")
+
+
+def send_verification_email(to_email: str, business_name: str, verify_url: str):
+    """Send email verification link."""
+    if not GMAIL_EMAIL or not GMAIL_APP_PASSWORD:
+        print(f"[DEV] Verify link for {to_email}: {verify_url}")
+        return True
+    import smtplib
+    from email.mime.multipart import MIMEMultipart
+    from email.mime.text import MIMEText
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = f"Verify your email — {business_name} AI Assistant"
+    msg["From"] = GMAIL_EMAIL
+    msg["To"] = to_email
+
+    html = f"""\
+    <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px;">
+        <h2 style="color:#4f46e5;">Verify Your Email 📧</h2>
+        <p>Welcome, {business_name}! Click below to activate your 7-day free trial:</p>
+        <a href="{verify_url}" style="display:inline-block;padding:14px 28px;background:#4f46e5;color:white;border-radius:8px;text-decoration:none;font-weight:600;margin:16px 0;">Verify Email & Start Trial →</a>
+        <p style="color:#666;font-size:13px;">Your trial includes: 10 queries/day, 1 file upload, 10 pages. Upgrade anytime for full access.</p>
+        <p style="color:#999;font-size:12px;">If you didn't create this account, ignore this email.</p>
+    </div>
+    """
+    msg.attach(MIMEText(html, "html"))
+
+    try:
+        with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+            server.login(GMAIL_EMAIL, GMAIL_APP_PASSWORD)
+            server.sendmail(GMAIL_EMAIL, to_email, msg.as_string())
+        return True
+    except Exception as e:
+        print(f"Verification email error: {e}")
+        return False
 
 
 # ── Forgot / Reset Password ─────────────────────────────────
@@ -384,6 +493,15 @@ def dashboard():
         data["chat_stats"] = get_chat_stats(client["client_id"])
         from datetime import datetime
         data["now_weekday"] = datetime.utcnow().strftime("%a")
+        # Trial info
+        if plan == "trial":
+            from datetime import datetime as dt
+            trial_expires = client.get("trial_expires", "")
+            if trial_expires:
+                expires_dt = dt.fromisoformat(trial_expires)
+                delta = (expires_dt - dt.utcnow()).days
+                data["trial_days_left"] = max(0, delta)
+            data["daily_queries_used"] = get_daily_query_count(client["client_id"])
 
     return render_template("dashboard.html", **data)
 
@@ -731,7 +849,6 @@ def create_checkout():
             cancel_url=request.url_root.replace("http://", "https://"),
             customer_email=email,
             subscription_data={
-                "trial_period_days": 7,
                 "metadata": {"business_name": business_name, "plan": plan},
             },
             metadata={"business_name": business_name, "plan": plan},
@@ -1107,6 +1224,19 @@ def ask_question(client_id):
     client = get_client(client_id)
     if client and client.get("status") == "cancelled":
         return jsonify({"error": "This chatbot is no longer active. The subscription has been cancelled."}), 403
+
+    # Enforce trial limits
+    if client and client.get("plan") == "trial":
+        from datetime import datetime
+        trial_expires = client.get("trial_expires", "")
+        if trial_expires and datetime.utcnow() > datetime.fromisoformat(trial_expires):
+            return jsonify({"error": "Your free trial has expired. Please subscribe to continue using the service."}), 403
+        if not client.get("email_verified"):
+            return jsonify({"error": "Please verify your email before using the chatbot."}), 403
+        daily_count = get_daily_query_count(client_id)
+        limit = PLAN_LIMITS["trial"]["max_queries_per_day"]
+        if daily_count >= limit:
+            return jsonify({"error": f"Daily query limit reached ({limit}/day on free trial). Upgrade for unlimited queries."}), 429
 
     data = request.get_json()
     if not data:

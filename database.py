@@ -99,6 +99,9 @@ def init_db():
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS bot_name TEXT DEFAULT 'AI Assistant'")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS welcome_message TEXT DEFAULT 'Hi! How can I help you today?'")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS api_key TEXT")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS verification_token TEXT")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS trial_expires TEXT")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS chat_logs (
                 id SERIAL PRIMARY KEY,
@@ -539,3 +542,19 @@ def get_chat_stats_filtered(client_id: str, start_date: str, end_date: str) -> d
     cur.close()
     conn.close()
     return {"count": count, "start_date": start_date, "end_date": end_date}
+
+
+def get_daily_query_count(client_id: str) -> int:
+    """Get today's query count for a client."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    today_str = datetime.utcnow().strftime("%Y-%m-%d")
+    if USE_PG:
+        cur.execute(f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at::text LIKE {P}", (client_id, f"{today_str}%"))
+    else:
+        cur.execute(f"SELECT COUNT(*) as cnt FROM chat_logs WHERE client_id = {P} AND created_at LIKE {P}", (client_id, f"{today_str}%"))
+    row = cur.fetchone()
+    count = dict(row)["cnt"] if row else 0
+    cur.close()
+    conn.close()
+    return count
