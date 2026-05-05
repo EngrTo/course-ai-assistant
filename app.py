@@ -493,6 +493,7 @@ def dashboard():
         data["all_clients"] = all_clients
         data["admins"] = admins
         data["mrr"] = mrr
+        data["all_verified"] = all(c.get("email_verified") for c in all_clients if c.get("plan") == "trial") if any(c.get("plan") == "trial" for c in all_clients) else True
         data["permissions"] = user["admin"].get("permissions", [])
 
     if user["is_client"]:
@@ -830,6 +831,30 @@ def dashboard_remove_admin():
     if not delete_admin(email):
         return jsonify({"error": "Cannot remove this admin."}), 400
     return jsonify({"success": True})
+
+
+# ── Admin: Toggle Email Verified (All) ────────────────────────
+
+@app.route("/dashboard/toggle-verified-all", methods=["POST"])
+@login_required
+def toggle_verified_all():
+    """Toggle email_verified for all trial clients (admin only)."""
+    user = get_user_context()
+    if not user or not user["is_admin"]:
+        return jsonify({"error": "Permission denied."}), 403
+
+    data = request.get_json()
+    verified = bool(data.get("verified", False))
+
+    from database import _get_conn, P
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"UPDATE clients SET email_verified = {P} WHERE plan = {P}", (verified, "trial"))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({"success": True, "email_verified": verified})
 
 
 # ── Stripe Checkout ───────────────────────────────────────────
@@ -1245,11 +1270,11 @@ def ask_question(client_id):
     # Enforce trial limits
     if client and client.get("plan") == "trial":
         from datetime import datetime
+        if not client.get("email_verified"):
+            return jsonify({"error": "Your account is pending verification. Please wait for admin approval."}), 403
         trial_expires = client.get("trial_expires", "")
         if trial_expires and datetime.utcnow() > datetime.fromisoformat(trial_expires):
             return jsonify({"error": "Your free trial has expired. Please subscribe to continue using the service."}), 403
-        if not client.get("email_verified"):
-            return jsonify({"error": "Please verify your email before using the chatbot."}), 403
         daily_count = get_daily_query_count(client_id)
         limit = PLAN_LIMITS["trial"]["max_queries_per_day"]
         if daily_count >= limit:

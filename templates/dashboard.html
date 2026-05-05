@@ -339,6 +339,13 @@
         <div class="section">
             <h3>📋 All Clients</h3>
             {% if all_clients %}
+            <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+                <label style="font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:6px;">
+                    <input type="checkbox" id="global-verify-toggle" onchange="toggleVerifiedAll(this.checked)" {{ 'checked' if all_verified }}>
+                    Approve all trial clients
+                </label>
+                <small style="color:#888;">(Allow trial clients to use the chatbot without email verification)</small>
+            </div>
             <table>
                 <thead><tr><th>Business</th><th>Email</th><th>Plan</th><th>Status</th><th>Docs</th><th>Created</th></tr></thead>
                 <tbody>
@@ -841,6 +848,16 @@
         }
 
         // Admin management
+        async function toggleVerifiedAll(verified) {
+            const res = await fetch('/dashboard/toggle-verified-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ verified }),
+            });
+            const data = await res.json();
+            if (!res.ok) alert(data.error || 'Failed');
+        }
+
         async function addAdmin() {
             const email = document.getElementById('new-admin-email').value;
             const password = document.getElementById('new-admin-pass').value;
