@@ -80,9 +80,21 @@ if not os.path.exists(INDEXES_DIR) or not os.listdir(INDEXES_DIR):
     print("Building indexes for all clients...")
     ingest_all()
 
-# Load all client indexes at startup
+# Load all client indexes at startup (rebuild from documents if needed)
 print("Loading client indexes...")
 indexes = load_all_indexes()
+if not indexes:
+    # No indexes found — try to rebuild from any existing client documents
+    client_dirs = get_client_dirs()
+    if client_dirs:
+        print(f"No indexes found. Rebuilding from {len(client_dirs)} client(s)...")
+        for cid in client_dirs:
+            try:
+                ingest_client(cid)
+                print(f"  Rebuilt index for: {cid}")
+            except Exception as e:
+                print(f"  Skip {cid}: {e}")
+        indexes = load_all_indexes()
 print(f"Ready! {len(indexes)} client(s) loaded.\n")
 
 
@@ -471,9 +483,18 @@ def dashboard_upload():
         new_indexes = reload_indexes()
         indexes.update(new_indexes)
         update_client(client_id, {"documents_uploaded": True, "page_count": net_new_pages, "file_count": len(final_files)})
+
+        # Persist documents to git so they survive Render deploys
+        import subprocess
+        try:
+            subprocess.run(["git", "add", docs_dir], capture_output=True)
+            subprocess.run(["git", "commit", "-m", f"docs: {client_id} uploaded {saved} file(s)"], capture_output=True)
+            subprocess.run(["git", "push"], capture_output=True)
+        except Exception:
+            pass  # Non-critical — docs still work for current deploy
+
         replaced_msg = f" ({len(replaced_names)} replaced)" if replaced_names else ""
         return jsonify({"success": True, "message": f"{saved} file(s) uploaded and processed! ({total_new_pages} pages){replaced_msg}"})
-    except Exception as e:
         print(f"Ingest error [{client_id}]: {e}")
         return jsonify({"error": "Processing failed. We'll fix this shortly."}), 500
 
@@ -533,6 +554,16 @@ def dashboard_delete_file():
             update_client(client_id, {"page_count": new_page_count, "file_count": len(remaining_files)})
         else:
             update_client(client_id, {"documents_uploaded": False, "page_count": 0, "file_count": 0})
+
+        # Persist deletion to git
+        import subprocess
+        try:
+            subprocess.run(["git", "add", "-A", docs_dir], capture_output=True)
+            subprocess.run(["git", "commit", "-m", f"docs: {client_id} deleted {filename}"], capture_output=True)
+            subprocess.run(["git", "push"], capture_output=True)
+        except Exception:
+            pass
+
         return jsonify({"success": True, "message": f"'{filename}' deleted. Freed {removed_pages} page(s)."})
     except Exception as e:
         print(f"Delete error [{client_id}]: {e}")
