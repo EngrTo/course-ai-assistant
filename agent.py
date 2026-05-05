@@ -49,7 +49,7 @@ def retrieve(query: str, index: dict, top_k: int = 4) -> list[dict]:
 
     results = []
     for idx in top_indices:
-        if similarities[idx] > 0.05:  # Minimum relevance threshold
+        if similarities[idx] > 0.01:  # Low threshold to catch misspellings
             results.append({
                 "text": chunks[idx]["text"],
                 "source": chunks[idx]["source"],
@@ -66,7 +66,10 @@ def get_client_config(client_id: str) -> dict:
         "name": client_id.replace("-", " ").title(),
         "system_prompt": (
             "You are a helpful AI assistant. Answer questions based on the "
-            "provided material. If the answer isn't in the material, say so. "
+            "provided material. If the user misspells a word or uses abbreviations, "
+            "try to understand what they mean and find the closest match in the material. "
+            "For example, if they ask about 'guatenberg' they likely mean 'Gutenberg'. "
+            "Only say you can't find information if there's truly nothing related in the material. "
             "Be concise and helpful."
         ),
     }
@@ -83,6 +86,13 @@ def ask(question: str, index: dict, client_id: str) -> dict:
     """Ask a question — retrieves context and gets LLM answer from Groq."""
     # Retrieve relevant chunks
     relevant_chunks = retrieve(question, index)
+
+    # Fallback: if no relevant chunks found (misspelling, abbreviation, etc.),
+    # provide some context from the first few chunks so the LLM can try to help
+    if not relevant_chunks:
+        fallback_chunks = index["chunks"][:6]
+        relevant_chunks = [{"text": c["text"], "source": c["source"], "score": 0.0} for c in fallback_chunks]
+
     context = "\n\n---\n\n".join(chunk["text"] for chunk in relevant_chunks)
 
     # Get client config
