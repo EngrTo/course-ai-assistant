@@ -380,7 +380,7 @@
                     <td><small>{{ a.permissions | join(', ') }}</small></td>
                     <td>
                         {% if a.role != 'super_admin' %}
-                        <button class="btn" style="background:#4f46e5;color:#fff;margin-right:6px;" onclick="editAdmin('{{ a.email }}', {{ a.permissions | tojson }})">Edit</button>
+                        <button class="btn" style="background:#4f46e5;color:#fff;margin-right:6px;" data-email="{{ a.email }}" data-perms='{{ a.permissions | tojson }}' onclick="editAdmin(this.dataset.email, JSON.parse(this.dataset.perms))">Edit</button>
                         <button class="btn btn-danger" onclick="removeAdmin('{{ a.email }}')">Remove</button>
                         {% else %}<small style="color:#888;">Protected</small>{% endif %}
                     </td>
@@ -574,6 +574,7 @@
         document.addEventListener('click', function(e) {
             const picker = document.getElementById('date-picker-field');
             const dropdown = document.getElementById('calendar-dropdown');
+            if (!picker || !dropdown) return;
             if (!picker.contains(e.target) && !dropdown.contains(e.target)) {
                 calendarOpen = false;
                 dropdown.style.display = 'none';
@@ -802,8 +803,10 @@
             return div.innerHTML;
         }
 
-        // Load conversations on page load
-        loadConversations(1);
+        // Load conversations on page load (only for clients)
+        if (document.getElementById('conversations-list')) {
+            loadConversations(1);
+        }
 
         // Cancel subscription
         async function cancelSubscription() {
