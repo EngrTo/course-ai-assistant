@@ -394,7 +394,6 @@
                     <span onclick="document.getElementById('add-admin-form').style.display='none'" style="position:absolute;top:10px;right:14px;cursor:pointer;font-size:18px;color:#666;font-weight:bold;">&times;</span>
                     <div class="form-row">
                         <input type="email" id="new-admin-email" placeholder="email@example.com">
-                        <input type="password" id="new-admin-pass" placeholder="Password (min 8 chars)">
                     </div>
                     <div class="perms">
                         <label><input type="checkbox" name="perm" value="view_clients" checked> View Clients</label>
@@ -860,17 +859,24 @@
 
         async function addAdmin() {
             const email = document.getElementById('new-admin-email').value;
-            const password = document.getElementById('new-admin-pass').value;
             const perms = [...document.querySelectorAll('input[name="perm"]:checked')].map(c => c.value);
 
             const res = await fetch('/dashboard/add-admin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, permissions: perms }),
+                body: JSON.stringify({ email, permissions: perms }),
             });
             const data = await res.json();
-            if (data.success) location.reload();
-            else alert(data.error || 'Failed');
+            if (data.success) {
+                if (data.temp_password) {
+                    alert(`Admin created!\n\nTemporary password: ${data.temp_password}\n\nShare this with the new admin.`);
+                } else {
+                    alert(data.message || 'Admin added successfully!');
+                }
+                location.reload();
+            } else {
+                alert(data.error || 'Failed');
+            }
         }
 
         async function removeAdmin(email) {

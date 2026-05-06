@@ -131,15 +131,21 @@ def get_user_context():
 
     ctx = {"email": email, "is_admin": False, "is_client": False, "admin": None, "client": None}
 
-    admin = get_admin(email)
-    if admin:
-        ctx["is_admin"] = True
-        ctx["admin"] = admin
-
     client = get_client_by_email(email)
     if client:
-        ctx["is_client"] = True
-        ctx["client"] = client
+        role = client.get("role", "client")
+        if role in ("admin", "super_admin"):
+            ctx["is_admin"] = True
+            ctx["admin"] = client  # admin data is on the same record
+        if client.get("plan") and client["plan"] != "none":
+            ctx["is_client"] = True
+            ctx["client"] = client
+    else:
+        # Check via get_admin for edge cases
+        admin = get_admin(email)
+        if admin:
+            ctx["is_admin"] = True
+            ctx["admin"] = admin
 
     return ctx
 
@@ -173,16 +179,17 @@ def login():
     if not email or not password:
         return jsonify({"error": "Email and password required."}), 400
 
-    # Try admin login
+    # Single table login — check password in clients table
+    client = verify_client_password(email, password)
+    if client:
+        flask_session["user_email"] = email
+        return jsonify({"success": True})
+
+    # Fallback: check if admin-only user (for backward compat during migration)
     admin = verify_admin(email, password)
     if admin:
         flask_session["user_email"] = email
         return jsonify({"success": True})
-
-    # Try client login
-    client = verify_client_password(email, password)
-    if client:
-        flask_session["user_email"] = email
         return jsonify({"success": True})
 
     return jsonify({"error": "Invalid email or password."}), 401
@@ -490,7 +497,9 @@ def dashboard():
     data = {"user": user}
 
     if user["is_admin"]:
-        all_clients = list(get_all_clients().values())
+        all_records = list(get_all_clients().values())
+        # Filter: show only actual clients (not admin-only records)
+        all_clients = [c for c in all_records if c.get("plan") and c["plan"] != "none"]
         admins = list(get_all_admins().values())
         plan_prices = {"starter": 97, "professional": 197, "enterprise": 497}
         mrr = sum(plan_prices.get(c.get("plan", ""), 0) for c in all_clients if c.get("status") == "active")
@@ -793,18 +802,34 @@ def dashboard_add_admin():
 
     data = request.get_json()
     email = data.get("email", "").strip()
-    password = data.get("password", "")
     permissions = data.get("permissions", [])
 
-    if not email or not password:
-        return jsonify({"error": "Email and password required."}), 400
-    if len(password) < 8:
-        return jsonify({"error": "Password must be at least 8 characters."}), 400
+    if not email:
+        return jsonify({"error": "Email is required."}), 400
 
+    # Check if this email is an existing client — they keep their password
+    existing_client = get_client_by_email(email)
+    if existing_client:
+        if existing_client.get("role") in ("admin", "super_admin"):
+            return jsonify({"error": "Already an admin."}), 400
+        # Promote: just update role and permissions
+        from database import _get_conn, P, _encode_perms
+        conn = _get_conn()
+        cur = conn.cursor()
+        perms = _encode_perms(permissions)
+        cur.execute(f"UPDATE clients SET role = 'admin', permissions = {P} WHERE LOWER(email) = LOWER({P})",
+                    (perms, email))
+        conn.commit()
+        cur.close()
+        conn.close()
+        return jsonify({"success": True, "message": "Client promoted to admin. They log in with their existing password."})
+
+    # New email — create admin record with a temp password
+    password = secrets.token_urlsafe(10)
     result = create_admin(email, password, permissions, user["email"])
     if not result:
         return jsonify({"error": "Admin already exists."}), 400
-    return jsonify({"success": True})
+    return jsonify({"success": True, "temp_password": password, "message": "Admin created with temporary password."})
 
 
 @app.route("/dashboard/remove-admin", methods=["POST"])

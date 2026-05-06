@@ -130,7 +130,6 @@
             <div class="add-form" id="add-admin-form">
                 <form onsubmit="return addAdmin(event)">
                     <input type="email" id="new-admin-email" placeholder="email@example.com" required>
-                    <input type="password" id="new-admin-password" placeholder="Password" required minlength="8">
                     <br style="margin:8px 0;"><br>
                     <label><input type="checkbox" name="perm" value="view_clients" checked> View Clients</label>
                     <label><input type="checkbox" name="perm" value="manage_clients"> Manage Clients</label>
@@ -160,17 +159,24 @@
         async function addAdmin(e) {
             e.preventDefault();
             const email = document.getElementById('new-admin-email').value;
-            const password = document.getElementById('new-admin-password').value;
             const perms = [...document.querySelectorAll('input[name="perm"]:checked')].map(c => c.value);
 
             const res = await fetch('/admin/add-admin', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, password, permissions: perms }),
+                body: JSON.stringify({ email, permissions: perms }),
             });
             const data = await res.json();
-            if (data.success) location.reload();
-            else alert(data.error || 'Failed');
+            if (data.success) {
+                if (data.temp_password) {
+                    alert(`Admin created!\n\nTemporary password: ${data.temp_password}\n\nShare this with the new admin.`);
+                } else {
+                    alert(data.message || 'Admin added successfully!');
+                }
+                location.reload();
+            } else {
+                alert(data.error || 'Failed');
+            }
             return false;
         }
     </script>

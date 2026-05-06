@@ -77,17 +77,9 @@ def init_db():
                 primary_color TEXT DEFAULT '#4f46e5',
                 bot_name TEXT DEFAULT 'AI Assistant',
                 welcome_message TEXT DEFAULT 'Hi! How can I help you today?',
-                api_key TEXT
-            );
-            CREATE TABLE IF NOT EXISTS admins (
-                email TEXT PRIMARY KEY,
-                password_hash TEXT NOT NULL,
-                role TEXT DEFAULT 'admin',
-                permissions TEXT[],
-                created_by TEXT,
-                created_at TEXT,
-                reset_token TEXT,
-                reset_expires FLOAT
+                api_key TEXT,
+                role TEXT DEFAULT 'client',
+                permissions TEXT[] DEFAULT '{}'
             );
         """)
         # Add columns if missing (for existing databases)
@@ -102,6 +94,8 @@ def init_db():
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS verification_token TEXT")
         cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS trial_expires TEXT")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS role TEXT DEFAULT 'client'")
+        cur.execute("ALTER TABLE clients ADD COLUMN IF NOT EXISTS permissions TEXT[] DEFAULT '{}'")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS chat_logs (
                 id SERIAL PRIMARY KEY,
@@ -122,6 +116,30 @@ def init_db():
                 UNIQUE(client_id, filename)
             );
         """)
+        # Migrate existing admins table data into clients (one-time migration)
+        cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'admins')")
+        admins_exists = cur.fetchone()
+        if admins_exists and dict(admins_exists).get("exists", False):
+            cur.execute("SELECT * FROM admins")
+            admin_rows = cur.fetchall()
+            for row in admin_rows:
+                a = dict(row)
+                # Check if this admin email already exists in clients
+                cur.execute(f"SELECT 1 FROM clients WHERE LOWER(email) = LOWER({P})", (a["email"],))
+                if cur.fetchone():
+                    # Update existing client with admin role
+                    cur.execute(f"UPDATE clients SET role = {P}, permissions = {P} WHERE LOWER(email) = LOWER({P})",
+                                (a["role"], a.get("permissions", []), a["email"]))
+                else:
+                    # Create a new client record for admin-only users
+                    cur.execute(f"""
+                        INSERT INTO clients (client_id, email, business_name, plan, password_hash, status, created_at, role, permissions)
+                        VALUES ({P}, {P}, {P}, {P}, {P}, {P}, {P}, {P}, {P})
+                    """, (a["email"].split("@")[0], a["email"], "Admin", "none", a["password_hash"],
+                          "active", a.get("created_at", ""), a["role"], a.get("permissions", [])))
+            conn.commit()
+            cur.execute("DROP TABLE admins")
+            conn.commit()
     else:
         cur.execute("""CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
@@ -143,17 +161,9 @@ def init_db():
             primary_color TEXT DEFAULT '#4f46e5',
             bot_name TEXT DEFAULT 'AI Assistant',
             welcome_message TEXT DEFAULT 'Hi! How can I help you today?',
-            api_key TEXT
-        )""")
-        cur.execute("""CREATE TABLE IF NOT EXISTS admins (
-            email TEXT PRIMARY KEY,
-            password_hash TEXT NOT NULL,
-            role TEXT DEFAULT 'admin',
-            permissions TEXT,
-            created_by TEXT,
-            created_at TEXT,
-            reset_token TEXT,
-            reset_expires REAL
+            api_key TEXT,
+            role TEXT DEFAULT 'client',
+            permissions TEXT DEFAULT '[]'
         )""")
         cur.execute("""CREATE TABLE IF NOT EXISTS chat_logs (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -162,6 +172,15 @@ def init_db():
             answer TEXT DEFAULT '',
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
+        # Add columns if missing (for existing SQLite databases)
+        try:
+            cur.execute("ALTER TABLE clients ADD COLUMN role TEXT DEFAULT 'client'")
+        except Exception:
+            pass
+        try:
+            cur.execute("ALTER TABLE clients ADD COLUMN permissions TEXT DEFAULT '[]'")
+        except Exception:
+            pass
     conn.commit()
     cur.close()
     conn.close()
@@ -319,14 +338,6 @@ def set_reset_token(email: str) -> str | None:
         conn.close()
         return token
 
-    cur.execute(f"UPDATE admins SET reset_token = {P}, reset_expires = {P} WHERE LOWER(email) = LOWER({P})",
-                (token, expires, email))
-    if cur.rowcount > 0:
-        conn.commit()
-        cur.close()
-        conn.close()
-        return token
-
     conn.commit()
     cur.close()
     conn.close()
@@ -344,13 +355,6 @@ def verify_reset_token(token: str) -> dict | None:
         cur.close()
         conn.close()
         return {"email": dict(row)["email"], "type": "client"}
-
-    cur.execute(f"SELECT email FROM admins WHERE reset_token = {P} AND reset_expires > {P}", (token, now))
-    row = cur.fetchone()
-    if row:
-        cur.close()
-        conn.close()
-        return {"email": dict(row)["email"], "type": "admin"}
 
     cur.close()
     conn.close()
@@ -370,14 +374,6 @@ def reset_password(email: str, new_password: str) -> bool:
         conn.close()
         return True
 
-    cur.execute(f"UPDATE admins SET password_hash = {P}, reset_token = NULL, reset_expires = NULL WHERE LOWER(email) = LOWER({P})",
-                (hashed, email))
-    if cur.rowcount > 0:
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-
     conn.commit()
     cur.close()
     conn.close()
@@ -387,37 +383,82 @@ def reset_password(email: str, new_password: str) -> bool:
 # ── Admin Database ───────────────────────────────────────────
 
 def init_super_admin(email: str, password: str):
+    """Ensure super admin exists in clients table."""
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) as cnt FROM admins")
-    row = cur.fetchone()
-    count = dict(row)["cnt"]
-    if count == 0:
+    cur.execute(f"SELECT 1 FROM clients WHERE LOWER(email) = LOWER({P}) AND role = 'super_admin'", (email,))
+    if cur.fetchone():
+        cur.close()
+        conn.close()
+        return
+    # Check if email already exists as a client
+    cur.execute(f"SELECT 1 FROM clients WHERE LOWER(email) = LOWER({P})", (email,))
+    if cur.fetchone():
+        # Promote to super_admin
         perms = _encode_perms(["manage_admins", "view_clients", "manage_clients", "view_analytics"])
+        cur.execute(f"UPDATE clients SET role = 'super_admin', permissions = {P}, password_hash = {P} WHERE LOWER(email) = LOWER({P})",
+                    (perms, generate_password_hash(password), email))
+    else:
+        # Create new record for super admin
+        perms = _encode_perms(["manage_admins", "view_clients", "manage_clients", "view_analytics"])
+        client_id = email.split("@")[0].lower()
+        client_id = "".join(c if c.isalnum() else "-" for c in client_id)
+        now = datetime.now().isoformat()
         cur.execute(f"""
-            INSERT INTO admins (email, password_hash, role, permissions, created_at)
-            VALUES (LOWER({P}), {P}, 'super_admin', {P}, {P})
-        """, (email, generate_password_hash(password), perms, datetime.now().isoformat()))
-        conn.commit()
+            INSERT INTO clients (client_id, email, business_name, plan, password_hash, status, created_at, role, permissions)
+            VALUES ({P}, {P}, {P}, {P}, {P}, {P}, {P}, {P}, {P})
+        """, (client_id, email.lower(), "Admin", "none", generate_password_hash(password),
+              "active", now, "super_admin", perms))
+    conn.commit()
     cur.close()
     conn.close()
 
 
 def create_admin(email: str, password: str, permissions: list, created_by: str) -> dict | None:
+    """Grant admin role. If email exists, promote. If not, create new record."""
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute(f"SELECT 1 FROM admins WHERE email = LOWER({P})", (email,))
-    if cur.fetchone():
-        cur.close()
-        conn.close()
-        return None
-
     perms = _encode_perms(permissions)
     now = datetime.now().isoformat()
-    cur.execute(f"""
-        INSERT INTO admins (email, password_hash, role, permissions, created_by, created_at)
-        VALUES (LOWER({P}), {P}, 'admin', {P}, {P}, {P})
-    """, (email, generate_password_hash(password), perms, created_by, now))
+
+    # Check if already an admin
+    cur.execute(f"SELECT role FROM clients WHERE LOWER(email) = LOWER({P})", (email,))
+    row = cur.fetchone()
+    if row:
+        r = dict(row)
+        if r.get("role") in ("admin", "super_admin"):
+            cur.close()
+            conn.close()
+            return None  # Already an admin
+        # Promote existing client
+        cur.execute(f"UPDATE clients SET role = 'admin', permissions = {P} WHERE LOWER(email) = LOWER({P})",
+                    (perms, email))
+        # If a password was given and they don't have one, set it
+        if password:
+            cur.execute(f"SELECT password_hash FROM clients WHERE LOWER(email) = LOWER({P})", (email,))
+            ph_row = cur.fetchone()
+            if not ph_row or not dict(ph_row).get("password_hash"):
+                cur.execute(f"UPDATE clients SET password_hash = {P} WHERE LOWER(email) = LOWER({P})",
+                            (generate_password_hash(password), email))
+    else:
+        # Create a new record
+        client_id = email.split("@")[0].lower()
+        client_id = "".join(c if c.isalnum() else "-" for c in client_id)
+        # Ensure unique client_id
+        base_id = client_id
+        counter = 1
+        while True:
+            cur.execute(f"SELECT 1 FROM clients WHERE client_id = {P}", (client_id,))
+            if not cur.fetchone():
+                break
+            client_id = f"{base_id}-{counter}"
+            counter += 1
+        cur.execute(f"""
+            INSERT INTO clients (client_id, email, business_name, plan, password_hash, status, created_at, role, permissions)
+            VALUES ({P}, {P}, {P}, {P}, {P}, {P}, {P}, {P}, {P})
+        """, (client_id, email.lower(), "Admin", "none", generate_password_hash(password),
+              "active", now, "admin", perms))
+
     conn.commit()
     cur.close()
     conn.close()
@@ -425,22 +466,24 @@ def create_admin(email: str, password: str, permissions: list, created_by: str) 
 
 
 def verify_admin(email: str, password: str) -> dict | None:
+    """Verify admin credentials (checks clients table where role is admin/super_admin)."""
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute(f"SELECT * FROM admins WHERE email = LOWER({P})", (email,))
+    cur.execute(f"SELECT * FROM clients WHERE LOWER(email) = LOWER({P}) AND role IN ('admin', 'super_admin')", (email,))
     admin = cur.fetchone()
     cur.close()
     conn.close()
     admin = _row(admin)
-    if admin and check_password_hash(admin["password_hash"], password):
+    if admin and admin.get("password_hash") and check_password_hash(admin["password_hash"], password):
         return admin
     return None
 
 
 def get_admin(email: str) -> dict | None:
+    """Get admin record if user has admin/super_admin role."""
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute(f"SELECT * FROM admins WHERE email = LOWER({P})", (email,))
+    cur.execute(f"SELECT * FROM clients WHERE LOWER(email) = LOWER({P}) AND role IN ('admin', 'super_admin')", (email,))
     admin = cur.fetchone()
     cur.close()
     conn.close()
@@ -448,9 +491,10 @@ def get_admin(email: str) -> dict | None:
 
 
 def get_all_admins() -> dict:
+    """Get all users with admin or super_admin role."""
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute("SELECT * FROM admins ORDER BY created_at")
+    cur.execute("SELECT * FROM clients WHERE role IN ('admin', 'super_admin') ORDER BY created_at")
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -458,14 +502,22 @@ def get_all_admins() -> dict:
 
 
 def delete_admin(email: str) -> bool:
+    """Remove admin role (demote back to client), never delete the record."""
     conn = _get_conn()
     cur = conn.cursor()
-    cur.execute(f"DELETE FROM admins WHERE email = LOWER({P}) AND role != 'super_admin'", (email,))
-    deleted = cur.rowcount > 0
+    # Never demote super_admin
+    cur.execute(f"SELECT role FROM clients WHERE LOWER(email) = LOWER({P})", (email,))
+    row = cur.fetchone()
+    if not row or dict(row).get("role") == "super_admin":
+        cur.close()
+        conn.close()
+        return False
+    perms = _encode_perms([])
+    cur.execute(f"UPDATE clients SET role = 'client', permissions = {P} WHERE LOWER(email) = LOWER({P})", (perms, email))
     conn.commit()
     cur.close()
     conn.close()
-    return deleted
+    return True
 
 
 # ── Chat Logs (Analytics) ────────────────────────────────────
