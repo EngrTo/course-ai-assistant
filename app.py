@@ -15,6 +15,7 @@ from database import (
     init_super_admin, verify_admin, get_admin, get_all_admins, get_all_clients,
     create_admin, delete_admin, set_reset_token, verify_reset_token, reset_password,
     log_chat_query, get_chat_stats, get_chat_stats_filtered, get_chat_history, get_daily_query_count,
+    save_document_to_db, delete_document_from_db, restore_documents_from_db,
 )
 
 load_dotenv()
@@ -83,6 +84,9 @@ def get_or_create_stripe_price(plan: str) -> str:
     STRIPE_PRICE_IDS[plan] = price.id
     print(f"Created Stripe Price for {plan}: {price.id}")
     return price.id
+
+# Restore documents from database (survives Render deploys)
+restore_documents_from_db()
 
 # Build indexes at startup if not already present
 if not os.path.exists(INDEXES_DIR) or not os.listdir(INDEXES_DIR):
@@ -604,7 +608,11 @@ def dashboard_upload():
     saved = 0
     for f in new_valid:
         filename = secure_filename(f.filename)
-        f.save(os.path.join(docs_dir, filename))
+        filepath = os.path.join(docs_dir, filename)
+        f.save(filepath)
+        # Persist to database so it survives Render deploys
+        with open(filepath, "rb") as saved_file:
+            save_document_to_db(client_id, filename, saved_file.read())
         saved += 1
 
     if saved == 0:
@@ -619,15 +627,6 @@ def dashboard_upload():
         new_indexes = reload_indexes()
         indexes.update(new_indexes)
         update_client(client_id, {"documents_uploaded": True, "page_count": net_new_pages, "file_count": len(final_files)})
-
-        # Persist documents to git so they survive Render deploys
-        import subprocess
-        try:
-            subprocess.run(["git", "add", docs_dir], capture_output=True)
-            subprocess.run(["git", "commit", "-m", f"docs: {client_id} uploaded {saved} file(s)"], capture_output=True)
-            subprocess.run(["git", "push"], capture_output=True)
-        except Exception:
-            pass  # Non-critical — docs still work for current deploy
 
         replaced_msg = f" ({len(replaced_names)} replaced)" if replaced_names else ""
         return jsonify({"success": True, "message": f"{saved} file(s) uploaded and processed! ({total_new_pages} pages){replaced_msg}"})
@@ -676,6 +675,7 @@ def dashboard_delete_file():
             removed_pages = 1
 
     os.remove(filepath)
+    delete_document_from_db(client_id, secure_filename(filename))
 
     # Recalculate counts
     remaining_files = [f for f in os.listdir(docs_dir) if f.endswith((".pdf", ".txt"))] if os.path.exists(docs_dir) else []
@@ -691,15 +691,6 @@ def dashboard_delete_file():
             update_client(client_id, {"page_count": new_page_count, "file_count": len(remaining_files)})
         else:
             update_client(client_id, {"documents_uploaded": False, "page_count": 0, "file_count": 0})
-
-        # Persist deletion to git
-        import subprocess
-        try:
-            subprocess.run(["git", "add", "-A", docs_dir], capture_output=True)
-            subprocess.run(["git", "commit", "-m", f"docs: {client_id} deleted {filename}"], capture_output=True)
-            subprocess.run(["git", "push"], capture_output=True)
-        except Exception:
-            pass
 
         return jsonify({"success": True, "message": f"'{filename}' deleted. Freed {removed_pages} page(s)."})
     except Exception as e:

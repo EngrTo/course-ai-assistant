@@ -112,6 +112,16 @@ def init_db():
             );
         """)
         cur.execute("ALTER TABLE chat_logs ADD COLUMN IF NOT EXISTS answer TEXT DEFAULT ''")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS client_documents (
+                id SERIAL PRIMARY KEY,
+                client_id TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                content BYTEA NOT NULL,
+                uploaded_at TIMESTAMP DEFAULT NOW(),
+                UNIQUE(client_id, filename)
+            );
+        """)
     else:
         cur.execute("""CREATE TABLE IF NOT EXISTS clients (
             client_id TEXT PRIMARY KEY,
@@ -558,3 +568,59 @@ def get_daily_query_count(client_id: str) -> int:
     cur.close()
     conn.close()
     return count
+
+
+# ── Document Storage (persists across deploys) ───────────────
+
+def save_document_to_db(client_id: str, filename: str, content: bytes):
+    """Save or replace a document in the database."""
+    if not USE_PG:
+        return  # Only needed for Render/PostgreSQL
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"""
+        INSERT INTO client_documents (client_id, filename, content)
+        VALUES ({P}, {P}, {P})
+        ON CONFLICT (client_id, filename) DO UPDATE SET content = EXCLUDED.content, uploaded_at = NOW()
+    """, (client_id, filename, content))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def delete_document_from_db(client_id: str, filename: str):
+    """Delete a document from the database."""
+    if not USE_PG:
+        return
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"DELETE FROM client_documents WHERE client_id = {P} AND filename = {P}", (client_id, filename))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def restore_documents_from_db():
+    """Restore all client documents from DB to filesystem. Called on startup."""
+    if not USE_PG:
+        return
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT client_id, filename, content FROM client_documents")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    restored = 0
+    for row in rows:
+        r = dict(row)
+        docs_dir = os.path.join("clients", r["client_id"], "documents")
+        os.makedirs(docs_dir, exist_ok=True)
+        filepath = os.path.join(docs_dir, r["filename"])
+        if not os.path.exists(filepath):
+            with open(filepath, "wb") as f:
+                f.write(bytes(r["content"]))
+            restored += 1
+
+    if restored:
+        print(f"Restored {restored} document(s) from database.")

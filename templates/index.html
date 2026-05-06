@@ -75,6 +75,12 @@
             color: #888;
         }
 
+        .bot.error-msg {
+            color: #dc2626;
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+        }
+
         .input-area {
             display: flex;
             gap: 10px;
@@ -171,9 +177,9 @@
             return div.innerHTML;
         }
 
-        function addMessage(text, role, sources) {
+        function addMessage(text, role, sources, isError) {
             const msg = document.createElement('div');
-            msg.className = `message ${role}`;
+            msg.className = `message ${role}${isError ? ' error-msg' : ''}`;
 
             let html = escapeHtml(text).replace(/\n/g, '<br>');
 
@@ -224,14 +230,14 @@
 
                 if (!res.ok) {
                     const errData = await res.json().catch(() => null);
-                    addMessage(errData?.error || 'Sorry, something went wrong. Please try again.', 'bot');
+                    addMessage(errData?.error || 'Sorry, something went wrong. Please try again.', 'bot', null, true);
                     return;
                 }
 
                 const data = await res.json();
 
                 if (data.error) {
-                    addMessage(data.error, 'bot');
+                    addMessage(data.error, 'bot', null, true);
                 } else {
                     addMessage(data.answer, 'bot', data.sources);
                 }
