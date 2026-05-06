@@ -86,6 +86,34 @@
         .navbar .role-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
         .navbar .role-admin { background: #fecaca; color: #991b1b; }
         .navbar .role-client { background: #dcfce7; color: #166534; }
+
+        /* ── Mobile Responsive ── */
+        @media (max-width: 768px) {
+            .navbar { padding: 12px 16px; flex-wrap: wrap; gap: 8px; }
+            .navbar h1 { font-size: 15px; }
+            .hero { padding: 48px 16px; }
+            .hero h1 { font-size: 28px; }
+            .hero p { font-size: 16px; }
+            .hero a { padding: 14px 24px !important; font-size: 15px !important; }
+            .pricing { padding: 40px 16px; }
+            .pricing h2 { font-size: 24px; margin-bottom: 24px; }
+            .pricing-grid { gap: 16px; }
+            .plan { width: 100%; max-width: 400px; padding: 24px 20px; }
+            .how-it-works { padding: 40px 16px; }
+            .how-it-works h2 { font-size: 24px; margin-bottom: 24px; }
+            .step-item { gap: 14px; }
+            .footer { padding: 24px 16px; }
+        }
+        @media (max-width: 480px) {
+            .navbar { padding: 10px 12px; }
+            .navbar h1 { font-size: 14px; }
+            .navbar .right { gap: 10px; font-size: 12px; }
+            .hero h1 { font-size: 24px; }
+            .hero p { font-size: 14px; }
+            .hero a { padding: 12px 20px !important; font-size: 14px !important; }
+            .plan .price { font-size: 28px; }
+            .plan h3 { font-size: 18px; }
+        }
     </style>
 </head>
 <body>

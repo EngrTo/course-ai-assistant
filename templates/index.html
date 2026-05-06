@@ -135,6 +135,26 @@
 
         /* Flexbox for message alignment */
         .chat-box { display: flex; flex-direction: column; }
+
+        /* ── Mobile Responsive ── */
+        @media (max-width: 768px) {
+            .container { margin: 16px auto; padding: 0 12px; }
+            .header h1 { font-size: 20px; }
+            .chat-box { height: 60vh; padding: 14px; }
+            .message { max-width: 90%; font-size: 14px; padding: 10px 14px; }
+            #userInput { padding: 12px 14px; font-size: 14px; }
+            #sendBtn { padding: 12px 20px; font-size: 14px; }
+        }
+        @media (max-width: 480px) {
+            .container { margin: 10px auto; padding: 0 8px; }
+            .header h1 { font-size: 18px; }
+            .header p { font-size: 12px; }
+            .chat-box { height: 55vh; padding: 10px; border-radius: 12px; }
+            .message { max-width: 94%; font-size: 13px; padding: 8px 12px; }
+            .input-area { gap: 6px; margin-top: 10px; }
+            #userInput { padding: 10px 12px; font-size: 14px; border-radius: 10px; }
+            #sendBtn { padding: 10px 16px; font-size: 13px; border-radius: 10px; }
+        }
     </style>
 </head>
 <body>
