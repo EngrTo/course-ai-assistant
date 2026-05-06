@@ -380,6 +380,7 @@
                     <td><small>{{ a.permissions | join(', ') }}</small></td>
                     <td>
                         {% if a.role != 'super_admin' %}
+                        <button class="btn" style="background:#4f46e5;color:#fff;margin-right:6px;" onclick="editAdmin('{{ a.email }}', {{ a.permissions | tojson }})">Edit</button>
                         <button class="btn btn-danger" onclick="removeAdmin('{{ a.email }}')">Remove</button>
                         {% else %}<small style="color:#888;">Protected</small>{% endif %}
                     </td>
@@ -885,6 +886,38 @@
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email }),
+            });
+            const data = await res.json();
+            if (data.success) location.reload();
+            else alert(data.error || 'Failed');
+        }
+
+        function editAdmin(email, currentPerms) {
+            const allPerms = ['view_clients', 'manage_clients', 'view_analytics', 'manage_admins'];
+            const labels = {'view_clients': 'View Clients', 'manage_clients': 'Manage Clients', 'view_analytics': 'Analytics', 'manage_admins': 'Manage Admins'};
+            let html = `<div style="margin-bottom:12px;"><strong>Edit permissions for:</strong> ${email}</div>`;
+            allPerms.forEach(p => {
+                const checked = currentPerms.includes(p) ? 'checked' : '';
+                html += `<label style="display:block;margin:6px 0;"><input type="checkbox" class="edit-perm" value="${p}" ${checked}> ${labels[p]}</label>`;
+            });
+            html += `<br><button class="btn btn-primary" onclick="saveAdminPerms('${email}')">Save</button> <button class="btn" onclick="document.getElementById('edit-admin-modal').style.display='none'">Cancel</button>`;
+            let modal = document.getElementById('edit-admin-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'edit-admin-modal';
+                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:9999;';
+                document.body.appendChild(modal);
+            }
+            modal.innerHTML = `<div style="background:#fff;padding:24px;border-radius:12px;max-width:360px;width:90%;">${html}</div>`;
+            modal.style.display = 'flex';
+        }
+
+        async function saveAdminPerms(email) {
+            const perms = [...document.querySelectorAll('.edit-perm:checked')].map(c => c.value);
+            const res = await fetch('/dashboard/edit-admin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, permissions: perms }),
             });
             const data = await res.json();
             if (data.success) location.reload();

@@ -849,6 +849,42 @@ def dashboard_remove_admin():
     return jsonify({"success": True})
 
 
+@app.route("/dashboard/edit-admin", methods=["POST"])
+@login_required
+def dashboard_edit_admin():
+    """Update an admin's permissions."""
+    user = get_user_context()
+    if not user or not user["is_admin"]:
+        return jsonify({"error": "Permission denied."}), 403
+    if "manage_admins" not in user["admin"].get("permissions", []):
+        return jsonify({"error": "Permission denied."}), 403
+
+    data = request.get_json()
+    email = data.get("email", "").strip()
+    permissions = data.get("permissions", [])
+
+    if not email:
+        return jsonify({"error": "Email is required."}), 400
+
+    # Don't allow editing super_admin
+    target = get_client_by_email(email)
+    if not target or target.get("role") not in ("admin", "super_admin"):
+        return jsonify({"error": "Admin not found."}), 404
+    if target.get("role") == "super_admin":
+        return jsonify({"error": "Cannot edit super admin permissions."}), 403
+
+    from database import _get_conn, P, _encode_perms
+    conn = _get_conn()
+    cur = conn.cursor()
+    perms = _encode_perms(permissions)
+    cur.execute(f"UPDATE clients SET permissions = {P} WHERE LOWER(email) = LOWER({P})", (perms, email))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    return jsonify({"success": True})
+
+
 # ── Admin: Toggle Email Verified (All) ────────────────────────
 
 @app.route("/dashboard/toggle-verified-all", methods=["POST"])
