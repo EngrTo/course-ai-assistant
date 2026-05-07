@@ -219,6 +219,25 @@
         <span style="margin-top:4px;display:inline-block;">Need help? <a href="mailto:toskicve@gmail.com" style="color:#a5b4fc;text-decoration:none;">toskicve@gmail.com</a></span>
     </div>
 
+    <!-- Checkout Modal -->
+    <div id="checkout-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;align-items:center;justify-content:center;">
+        <div style="background:white;border-radius:16px;padding:32px;max-width:420px;width:90%;margin:auto;position:relative;box-shadow:0 20px 60px rgba(0,0,0,0.3);">
+            <button onclick="closeModal()" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:24px;cursor:pointer;color:#666;">&times;</button>
+            <h2 style="margin-bottom:4px;font-size:22px;">Get Started</h2>
+            <p id="modal-plan-label" style="color:#4f46e5;font-weight:600;margin-bottom:20px;font-size:14px;"></p>
+            <div id="modal-error" style="display:none;background:#fef2f2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:14px;"></div>
+            <form id="checkout-form" onsubmit="submitCheckout(event)">
+                <input type="hidden" id="modal-plan" value="">
+                <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Business Name</label>
+                <input type="text" id="modal-name" required placeholder="e.g. Acme Corp" style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:15px;margin-bottom:14px;outline:none;">
+                <label style="font-size:13px;font-weight:600;color:#555;display:block;margin-bottom:4px;">Email Address</label>
+                <input type="email" id="modal-email" required placeholder="you@company.com" style="width:100%;padding:12px 14px;border:1px solid #ddd;border-radius:8px;font-size:15px;margin-bottom:20px;outline:none;">
+                <button type="submit" id="modal-submit-btn" style="width:100%;padding:14px;background:#4f46e5;color:white;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;transition:background 0.2s;">Continue to Payment →</button>
+            </form>
+            <p style="text-align:center;font-size:11px;color:#999;margin-top:12px;">🔒 Secure payment via Stripe. Cancel anytime.</p>
+        </div>
+    </div>
+
     <script>
         const subscribedPlan = "{{ subscribed_plan or '' }}";
 
@@ -242,12 +261,49 @@
             });
         }
 
-        async function checkout(plan) {
+        const planNames = { starter: 'Starter — $97/mo', professional: 'Professional — $197/mo', enterprise: 'Enterprise — $497/mo' };
+
+        function checkout(plan) {
             if (subscribedPlan === plan) return;
-            const name = prompt("Enter your business name:");
-            if (!name) return;
-            const email = prompt("Enter your email address:");
-            if (!email) return;
+            document.getElementById('modal-plan').value = plan;
+            document.getElementById('modal-plan-label').textContent = planNames[plan] || plan;
+            document.getElementById('modal-error').style.display = 'none';
+            document.getElementById('modal-name').value = '';
+            document.getElementById('modal-email').value = '';
+            document.getElementById('modal-submit-btn').disabled = false;
+            document.getElementById('modal-submit-btn').textContent = 'Continue to Payment →';
+            const modal = document.getElementById('checkout-modal');
+            modal.style.display = 'flex';
+            document.getElementById('modal-name').focus();
+        }
+
+        function closeModal() {
+            document.getElementById('checkout-modal').style.display = 'none';
+        }
+
+        // Close on backdrop click
+        document.getElementById('checkout-modal').addEventListener('click', function(e) {
+            if (e.target === this) closeModal();
+        });
+
+        // Close on Escape
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+
+        async function submitCheckout(e) {
+            e.preventDefault();
+            const plan = document.getElementById('modal-plan').value;
+            const name = document.getElementById('modal-name').value.trim();
+            const email = document.getElementById('modal-email').value.trim();
+            const btn = document.getElementById('modal-submit-btn');
+            const errEl = document.getElementById('modal-error');
+
+            if (!name || !email) return;
+
+            btn.disabled = true;
+            btn.textContent = 'Processing...';
+            errEl.style.display = 'none';
 
             try {
                 const res = await fetch("/checkout", {
@@ -259,10 +315,16 @@
                 if (data.url) {
                     window.location.href = data.url;
                 } else {
-                    alert(data.error || "Something went wrong.");
+                    errEl.textContent = data.error || "Something went wrong.";
+                    errEl.style.display = 'block';
+                    btn.disabled = false;
+                    btn.textContent = 'Continue to Payment →';
                 }
             } catch (err) {
-                alert("Connection error. Please try again.");
+                errEl.textContent = "Connection error. Please try again.";
+                errEl.style.display = 'block';
+                btn.disabled = false;
+                btn.textContent = 'Continue to Payment →';
             }
         }
 

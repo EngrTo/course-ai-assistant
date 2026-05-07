@@ -330,6 +330,15 @@
         </div>
         {% endif %}
 
+        <!-- Billing Portal -->
+        {% if client.plan != 'trial' and client.stripe_customer_id %}
+        <div class="section">
+            <h3>💳 Billing</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">View invoices, update payment method, or download receipts.</p>
+            <button class="btn btn-outline" onclick="openBillingPortal()">Manage Billing →</button>
+        </div>
+        {% endif %}
+
         <!-- Cancel / Resubscribe -->
         <div class="section" style="border-top:1px solid #fee2e2;padding-top:20px;">
             {% if client.status == 'cancelled' %}
@@ -887,6 +896,21 @@
         // Load conversations on page load (only for clients)
         if (document.getElementById('conversations-list')) {
             loadConversations(1);
+        }
+
+        // Billing portal
+        async function openBillingPortal() {
+            try {
+                const res = await fetch('/billing-portal', { method: 'POST' });
+                const data = await res.json();
+                if (data.url) {
+                    window.location.href = data.url;
+                } else {
+                    alert(data.error || 'Could not open billing portal.');
+                }
+            } catch (err) {
+                alert('Connection error. Please try again.');
+            }
         }
 
         // Cancel subscription

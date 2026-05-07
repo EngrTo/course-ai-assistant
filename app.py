@@ -1138,6 +1138,31 @@ def cancel_subscription():
         return jsonify({"error": "Cancellation failed. Contact support."}), 500
 
 
+@app.route("/billing-portal", methods=["POST"])
+@login_required
+def billing_portal():
+    """Create a Stripe Customer Portal session for managing billing."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "No subscription found."}), 403
+
+    client = user["client"]
+    customer_id = client.get("stripe_customer_id")
+
+    if not customer_id:
+        return jsonify({"error": "No billing account found. Contact support."}), 400
+
+    try:
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=request.url_root.replace("http://", "https://") + "dashboard",
+        )
+        return jsonify({"url": session.url})
+    except Exception as e:
+        print(f"Billing portal error: {type(e).__name__}: {e}")
+        return jsonify({"error": "Could not open billing portal. Contact support."}), 500
+
+
 @app.route("/resubscribe", methods=["POST"])
 @login_required
 def resubscribe():
