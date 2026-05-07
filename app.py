@@ -3,6 +3,7 @@ import os
 import secrets
 import stripe
 from functools import wraps
+from datetime import timedelta
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, jsonify, redirect, make_response, session as flask_session
 from flask_cors import CORS
@@ -22,7 +23,13 @@ load_dotenv()
 
 app = Flask(__name__)
 app.secret_key = os.getenv("SECRET_KEY", secrets.token_hex(32))
+app.permanent_session_lifetime = timedelta(hours=24)
 CORS(app)
+
+
+@app.before_request
+def make_session_permanent():
+    flask_session.permanent = True
 
 
 @app.errorhandler(500)
