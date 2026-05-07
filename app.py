@@ -921,6 +921,9 @@ def dashboard_get_reviews():
     """Get all reviews (visible to admins and clients)."""
     from database import get_all_reviews
     reviews = get_all_reviews()
+    for r in reviews:
+        if r.get("created_at") and not isinstance(r["created_at"], str):
+            r["created_at"] = r["created_at"].strftime("%Y-%m-%d %H:%M")
     return jsonify({"reviews": reviews})
 
 

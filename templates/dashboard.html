@@ -357,7 +357,7 @@
             <div class="msg msg-error" id="review-err" style="display:none;"></div>
             {% if my_review %}
             <div style="background:#f8fafc;border-radius:8px;padding:14px;margin-bottom:12px;border-left:3px solid #4f46e5;">
-                <small style="color:#666;">Your review (submitted {{ my_review.created_at[:10] if my_review.created_at is string else my_review.created_at.strftime('%Y-%m-%d') }}):</small>
+                <small style="color:#666;">Your review (submitted {{ my_review.created_at[:16] if my_review.created_at is string else my_review.created_at.strftime('%Y-%m-%d %H:%M') }}):</small>
                 <p style="font-size:14px;margin-top:4px;">{{ my_review.review }}</p>
             </div>
             <p style="font-size:12px;color:#888;">You can submit a new review to update it.</p>
@@ -373,22 +373,24 @@
 
 
         <!-- All Reviews (visible to everyone) -->
-        {% if reviews %}
         <div class="section">
             <h3>💬 Client Reviews</h3>
-            <div style="max-height:400px;overflow-y:auto;">
+            <div id="reviews-container" style="max-height:400px;overflow-y:auto;">
+                {% if reviews %}
                 {% for r in reviews %}
                 <div style="padding:12px;border-bottom:1px solid #f0f0f0;{% if loop.last %}border-bottom:none;{% endif %}">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                         <strong style="font-size:13px;color:#333;">{{ r.business_name }}</strong>
-                        <small style="color:#999;font-size:11px;">{{ r.created_at[:10] if r.created_at is string else r.created_at.strftime('%Y-%m-%d') }}</small>
+                        <small style="color:#999;font-size:11px;">{{ r.created_at[:16] if r.created_at is string else r.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
                     </div>
                     <p style="font-size:13px;color:#555;margin:0;">{{ r.review }}</p>
                 </div>
                 {% endfor %}
+                {% else %}
+                <p style="color:#999;font-size:13px;text-align:center;padding:16px;">No reviews yet.</p>
+                {% endif %}
             </div>
         </div>
-        {% endif %}
 
 
         {# ── ADMIN SECTION ── #}
@@ -1041,12 +1043,49 @@
             if (data.success) {
                 msgEl.textContent = data.message;
                 msgEl.style.display = 'block';
-                setTimeout(() => location.reload(), 1500);
+                ta.value = '';
+                document.getElementById('review-chars').textContent = '0/1000';
+                setTimeout(() => { msgEl.style.display = 'none'; }, 3000);
+                refreshReviews();
             } else {
                 errEl.textContent = data.error || 'Failed to submit review.';
                 errEl.style.display = 'block';
             }
         }
+
+        // Real-time reviews polling
+        function escapeHtmlReview(text) {
+            const d = document.createElement('div');
+            d.textContent = text;
+            return d.innerHTML;
+        }
+
+        async function refreshReviews() {
+            try {
+                const res = await fetch('/dashboard/reviews');
+                const data = await res.json();
+                const container = document.getElementById('reviews-container');
+                if (!container) return;
+                if (!data.reviews || data.reviews.length === 0) {
+                    container.innerHTML = '<p style="color:#999;font-size:13px;text-align:center;padding:16px;">No reviews yet.</p>';
+                    return;
+                }
+                container.innerHTML = data.reviews.map((r, i) => {
+                    const ts = (r.created_at || '').substring(0, 16).replace('T', ' ');
+                    const border = i < data.reviews.length - 1 ? 'border-bottom:1px solid #f0f0f0;' : '';
+                    return `<div style="padding:12px;${border}">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <strong style="font-size:13px;color:#333;">${escapeHtmlReview(r.business_name)}</strong>
+                            <small style="color:#999;font-size:11px;">${ts}</small>
+                        </div>
+                        <p style="font-size:13px;color:#555;margin:0;">${escapeHtmlReview(r.review)}</p>
+                    </div>`;
+                }).join('');
+            } catch(e) {}
+        }
+
+        // Poll for new reviews every 10 seconds
+        setInterval(refreshReviews, 10000);
     </script>
 </body>
 </html>
