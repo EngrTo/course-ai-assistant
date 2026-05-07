@@ -116,6 +116,16 @@ def init_db():
                 UNIQUE(client_id, filename)
             );
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS client_reviews (
+                id SERIAL PRIMARY KEY,
+                client_id TEXT NOT NULL,
+                email TEXT NOT NULL,
+                business_name TEXT NOT NULL,
+                review TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT NOW()
+            );
+        """)
         # Migrate existing admins table data into clients (one-time migration)
         cur.execute("SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'admins')")
         admins_exists = cur.fetchone()
@@ -170,6 +180,14 @@ def init_db():
             client_id TEXT NOT NULL,
             question TEXT NOT NULL,
             answer TEXT DEFAULT '',
+            created_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )""")
+        cur.execute("""CREATE TABLE IF NOT EXISTS client_reviews (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id TEXT NOT NULL,
+            email TEXT NOT NULL,
+            business_name TEXT NOT NULL,
+            review TEXT NOT NULL,
             created_at TEXT DEFAULT CURRENT_TIMESTAMP
         )""")
         # Add columns if missing (for existing SQLite databases)
@@ -676,3 +694,40 @@ def restore_documents_from_db():
 
     if restored:
         print(f"Restored {restored} document(s) from database.")
+
+
+# ── Reviews ──────────────────────────────────────────────────
+
+def submit_review(client_id: str, email: str, business_name: str, review: str):
+    """Save a client review."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"""
+        INSERT INTO client_reviews (client_id, email, business_name, review)
+        VALUES ({P}, {P}, {P}, {P})
+    """, (client_id, email, business_name, review))
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+def get_all_reviews():
+    """Get all reviews, newest first."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM client_reviews ORDER BY created_at DESC")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def get_client_review(client_id: str):
+    """Get review by a specific client (latest one)."""
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(f"SELECT * FROM client_reviews WHERE client_id = {P} ORDER BY created_at DESC LIMIT 1", (client_id,))
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(row) if row else None

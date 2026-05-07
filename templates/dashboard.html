@@ -349,6 +349,45 @@
             {% endif %}
         </div>
 
+        <!-- Submit Review -->
+        <div class="section">
+            <h3>⭐ Leave a Review</h3>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Share your experience with our AI Assistant platform.</p>
+            <div class="msg msg-success" id="review-msg" style="display:none;"></div>
+            <div class="msg msg-error" id="review-err" style="display:none;"></div>
+            {% if my_review %}
+            <div style="background:#f8fafc;border-radius:8px;padding:14px;margin-bottom:12px;border-left:3px solid #4f46e5;">
+                <small style="color:#666;">Your review (submitted {{ my_review.created_at[:10] if my_review.created_at is string else my_review.created_at.strftime('%Y-%m-%d') }}):</small>
+                <p style="font-size:14px;margin-top:4px;">{{ my_review.review }}</p>
+            </div>
+            <p style="font-size:12px;color:#888;">You can submit a new review to update it.</p>
+            {% endif %}
+            <textarea id="review-text" rows="4" maxlength="1000" placeholder="Tell us what you think about the platform..." style="width:100%;padding:12px;border:1px solid #ddd;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;margin-bottom:8px;">{% if my_review %}{{ my_review.review }}{% endif %}</textarea>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <small id="review-chars" style="color:#888;">0/1000</small>
+                <button class="btn btn-primary" onclick="submitReview()">Submit Review</button>
+            </div>
+        </div>
+
+        {% endif %}
+
+
+        <!-- All Reviews (visible to everyone) -->
+        {% if reviews %}
+        <div class="section">
+            <h3>💬 Client Reviews</h3>
+            <div style="max-height:400px;overflow-y:auto;">
+                {% for r in reviews %}
+                <div style="padding:12px;border-bottom:1px solid #f0f0f0;{% if loop.last %}border-bottom:none;{% endif %}">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <strong style="font-size:13px;color:#333;">{{ r.business_name }}</strong>
+                        <small style="color:#999;font-size:11px;">{{ r.created_at[:10] if r.created_at is string else r.created_at.strftime('%Y-%m-%d') }}</small>
+                    </div>
+                    <p style="font-size:13px;color:#555;margin:0;">{{ r.review }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
         {% endif %}
 
 
@@ -965,6 +1004,48 @@
             const data = await res.json();
             if (data.success) location.reload();
             else alert(data.error || 'Failed');
+        }
+
+        // Reviews
+        (function() {
+            const ta = document.getElementById('review-text');
+            const counter = document.getElementById('review-chars');
+            if (ta && counter) {
+                counter.textContent = ta.value.length + '/1000';
+                ta.addEventListener('input', () => {
+                    counter.textContent = ta.value.length + '/1000';
+                });
+            }
+        })();
+
+        async function submitReview() {
+            const ta = document.getElementById('review-text');
+            const review = ta.value.trim();
+            const msgEl = document.getElementById('review-msg');
+            const errEl = document.getElementById('review-err');
+            msgEl.style.display = 'none';
+            errEl.style.display = 'none';
+
+            if (!review) {
+                errEl.textContent = 'Please write a review before submitting.';
+                errEl.style.display = 'block';
+                return;
+            }
+
+            const res = await fetch('/dashboard/submit-review', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ review }),
+            });
+            const data = await res.json();
+            if (data.success) {
+                msgEl.textContent = data.message;
+                msgEl.style.display = 'block';
+                setTimeout(() => location.reload(), 1500);
+            } else {
+                errEl.textContent = data.error || 'Failed to submit review.';
+                errEl.style.display = 'block';
+            }
         }
     </script>
 </body>

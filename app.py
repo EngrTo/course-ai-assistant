@@ -534,6 +534,12 @@ def dashboard():
                 data["trial_days_left"] = max(0, delta)
             data["daily_queries_used"] = get_daily_query_count(client["client_id"])
 
+    # Reviews (visible to both admins and clients)
+    from database import get_all_reviews, get_client_review
+    data["reviews"] = get_all_reviews()
+    if user["is_client"]:
+        data["my_review"] = get_client_review(user["client"]["client_id"])
+
     return render_template("dashboard.html", **data)
 
 
@@ -883,6 +889,39 @@ def dashboard_edit_admin():
     conn.close()
 
     return jsonify({"success": True})
+
+
+# ── Reviews ───────────────────────────────────────────────────
+
+@app.route("/dashboard/submit-review", methods=["POST"])
+@login_required
+def dashboard_submit_review():
+    """Client submits a review."""
+    user = get_user_context()
+    if not user or not user["is_client"]:
+        return jsonify({"error": "Only clients can submit reviews."}), 403
+
+    client = user["client"]
+    data = request.get_json()
+    review = data.get("review", "").strip()
+
+    if not review:
+        return jsonify({"error": "Review cannot be empty."}), 400
+    if len(review) > 1000:
+        return jsonify({"error": "Review is too long (max 1000 characters)."}), 400
+
+    from database import submit_review
+    submit_review(client["client_id"], client["email"], client["business_name"], review)
+    return jsonify({"success": True, "message": "Thank you for your review!"})
+
+
+@app.route("/dashboard/reviews", methods=["GET"])
+@login_required
+def dashboard_get_reviews():
+    """Get all reviews (visible to admins and clients)."""
+    from database import get_all_reviews
+    reviews = get_all_reviews()
+    return jsonify({"reviews": reviews})
 
 
 # ── Admin: Toggle Email Verified (All) ────────────────────────
