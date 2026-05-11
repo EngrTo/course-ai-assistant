@@ -1,5 +1,5 @@
 /**
- * AI Assistant — Embeddable Chat Widget
+ * TrainMyBot — Embeddable Chat Widget
  * Usage: <script src="https://your-domain.com/static/widget.js" data-client="school"></script>
  */
 (function () {
@@ -7,7 +7,7 @@
   const CLIENT_ID = script.getAttribute("data-client");
   const API_BASE = script.src.replace("/static/widget.js", "");
   const THEME_COLOR = script.getAttribute("data-color") || "#4f46e5";
-  const TITLE = script.getAttribute("data-title") || "AI Assistant";
+  const TITLE = script.getAttribute("data-title") || "TrainMyBot";
   const WELCOME = script.getAttribute("data-welcome") || "Hi! How can I help you today?";
   const POSITION = script.getAttribute("data-position") || "right";
 
@@ -173,7 +173,7 @@
   const btn = document.createElement("button");
   btn.id = "ai-widget-btn";
   btn.innerHTML = "💬";
-  btn.title = "Chat with AI Assistant";
+  btn.title = "Chat with TrainMyBot";
   document.body.appendChild(btn);
 
   // Create widget container
@@ -191,7 +191,7 @@
       <input type="text" id="ai-widget-input" placeholder="Type your question..." autocomplete="off">
       <button id="ai-widget-send">Send</button>
     </div>
-    <div id="ai-widget-powered">Powered by AI Assistant</div>
+    <div id="ai-widget-powered">Powered by TrainMyBot</div>
   `;
   document.body.appendChild(container);
 

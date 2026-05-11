@@ -1,4 +1,4 @@
-"""Flask web app — Multi-tenant AI Assistant powered by Groq + Stripe."""
+"""Flask web app — Multi-tenant TrainMyBot powered by Groq + Stripe."""
 import os
 import secrets
 import stripe
@@ -81,7 +81,7 @@ def get_or_create_stripe_price(plan: str) -> str:
         return STRIPE_PRICE_IDS[plan]
 
     # Create product + price in Stripe
-    product = stripe.Product.create(name=f"AI Assistant — {plan.title()} Plan")
+    product = stripe.Product.create(name=f"TrainMyBot — {plan.title()} Plan")
     price = stripe.Price.create(
         product=product.id,
         unit_amount=PLAN_PRICES[plan],
@@ -331,7 +331,7 @@ def send_verification_email(to_email: str, business_name: str, verify_url: str):
     from email.mime.text import MIMEText
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Verify your email — {business_name} AI Assistant"
+    msg["Subject"] = f"Verify your email — {business_name} on TrainMyBot"
     msg["From"] = GMAIL_EMAIL
     msg["To"] = to_email
 
@@ -368,7 +368,7 @@ def send_reset_email(to_email: str, reset_url: str):
     from email.mime.text import MIMEText
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = "Reset Your Password — AI Assistant Platform"
+    msg["Subject"] = "Reset Your Password — TrainMyBot"
     msg["From"] = GMAIL_EMAIL
     msg["To"] = to_email
 
@@ -402,7 +402,7 @@ def send_welcome_email(to_email: str, business_name: str, login_url: str):
     from email.mime.text import MIMEText
 
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"Welcome to AI Assistant Platform — {business_name} is live! 🚀"
+    msg["Subject"] = f"Welcome to TrainMyBot — {business_name} is live! 🚀"
     msg["From"] = GMAIL_EMAIL
     msg["To"] = to_email
 
@@ -739,7 +739,7 @@ def dashboard_branding():
 
     data = request.get_json()
     primary_color = data.get("primary_color", "#4f46e5").strip()
-    bot_name = data.get("bot_name", "AI Assistant").strip()[:50]
+    bot_name = data.get("bot_name", "TrainMyBot").strip()[:50]
     welcome_message = data.get("welcome_message", "Hi! How can I help you today?").strip()[:200]
 
     # Basic color validation
@@ -1381,7 +1381,7 @@ def client_chat(client_id):
         return jsonify({"error": f"Client '{client_id}' not found"}), 404
     branding = {
         "primary_color": client.get("primary_color", "#4f46e5") if client else "#4f46e5",
-        "bot_name": client.get("bot_name", "AI Assistant") if client else "AI Assistant",
+        "bot_name": client.get("bot_name", "TrainMyBot") if client else "TrainMyBot",
         "welcome_message": client.get("welcome_message", "Hi! How can I help you today?") if client else "Hi! How can I help you today?",
     }
     return render_template("index.html", client_id=client_id, branding=branding)

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard — AI Assistant Platform</title>
+    <title>Dashboard — TrainMyBot</title>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f0f2f5; color: #333; }
@@ -97,7 +97,7 @@
 </head>
 <body>
     <div class="navbar">
-        <a href="/" style="color:white;text-decoration:none;">🤖 AI Assistant Platform</a>
+        <a href="/" style="color:white;text-decoration:none;">🤖 TrainMyBot</a>
         <div class="right">
             <span>{{ user.email }}</span>
             {% if user.is_admin %}<span class="role-badge role-admin">Admin</span>{% endif %}
@@ -231,7 +231,7 @@
             <div class="widget-code" id="widget-code">&lt;script
   src="{{ base_url }}/static/widget.js"
   data-client="{{ client.client_id }}"
-  data-title="{{ client.bot_name or 'AI Assistant' }}"
+  data-title="{{ client.bot_name or 'TrainMyBot' }}"
   data-color="{{ client.primary_color or '#4f46e5' }}"
   data-welcome="{{ client.welcome_message or 'Hi! How can I help you today?' }}"&gt;
 &lt;/script&gt;</div>
@@ -247,7 +247,7 @@
             <div style="display:grid;gap:12px;">
                 <div>
                     <label style="font-size:13px;font-weight:600;">Bot Name</label>
-                    <input type="text" id="brand-name" value="{{ client.bot_name or 'AI Assistant' }}" maxlength="50" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;margin-top:4px;">
+                    <input type="text" id="brand-name" value="{{ client.bot_name or 'TrainMyBot' }}" maxlength="50" style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:6px;margin-top:4px;">
                 </div>
                 <div>
                     <label style="font-size:13px;font-weight:600;">Welcome Message</label>
@@ -366,7 +366,7 @@
         <!-- Submit Review -->
         <div class="section">
             <h3>⭐ Leave a Review</h3>
-            <p style="font-size:13px;color:#666;margin-bottom:12px;">Share your experience with our AI Assistant platform.</p>
+            <p style="font-size:13px;color:#666;margin-bottom:12px;">Share your experience with TrainMyBot.</p>
             <div class="msg msg-success" id="review-msg" style="display:none;"></div>
             <div class="msg msg-error" id="review-err" style="display:none;"></div>
             {% if my_review %}
