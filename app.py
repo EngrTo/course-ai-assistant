@@ -501,6 +501,10 @@ def dashboard():
     if not user:
         return redirect("/login")
 
+    if not user["is_admin"] and not user["is_client"]:
+        flask_session.clear()
+        return redirect("/login")
+
     data = {"user": user}
 
     if user["is_admin"]:
