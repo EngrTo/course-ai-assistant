@@ -1040,7 +1040,7 @@ def upgrade_plan():
             )
 
             # Update plan immediately — Stripe handles billing
-            update_client(client["client_id"], {"plan": new_plan})
+            update_client(client["client_id"], {"plan": new_plan, "status": "active"})
             return jsonify({"success": True, "message": f"Upgraded to {new_plan.title()}! Prorated billing applied."})
         else:
             # No subscription ID stored — fallback to new checkout
@@ -1065,7 +1065,7 @@ def upgrade_success():
     new_plan = request.args.get("plan")
     client_id = request.args.get("client_id")
     if client_id and new_plan:
-        update_client(client_id, {"plan": new_plan})
+        update_client(client_id, {"plan": new_plan, "status": "active"})
     return redirect("/dashboard")
 
 
