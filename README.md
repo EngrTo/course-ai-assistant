@@ -1,39 +1,43 @@
-# AI Assistant SaaS Platform
+# TrainMyBot
 
-Multi-tenant AI chatbot platform with self-service signup, Stripe subscriptions, and plan-based limits. Clients upload documents, get a custom AI chatbot widget for their website.
+Multi-tenant AI chatbot SaaS platform. Clients sign up, upload documents, and get a custom AI chatbot widget for their website — trained on their own content.
 
 **Live:** https://course-ai-assistant.onrender.com
 
 ## Features
 
 ### Plans & Limits
-| Feature | Starter ($97/mo) | Professional ($197/mo) | Enterprise ($497/mo) |
-|---------|:-:|:-:|:-:|
-| Files | 5 | 20 | Unlimited |
-| Pages | 50 | 200 | Unlimited |
-| Custom Branding | ❌ | ✅ | ✅ |
-| API Access | ❌ | ❌ | ✅ |
-| Prorated Upgrades | ✅ | ✅ | — |
+| Feature | Trial (Free) | Starter ($97/mo) | Professional ($197/mo) | Enterprise ($497/mo) |
+|---------|:-:|:-:|:-:|:-:|
+| Files | 1 | 5 | 20 | Unlimited |
+| Pages | 10 | 50 | 200 | Unlimited |
+| Queries/day | 10 | Unlimited | Unlimited | Unlimited |
+| Custom Branding | ❌ | ❌ | ✅ | ✅ |
+| API Access | ❌ | ❌ | ❌ | ✅ |
+| Duration | 7 days | — | — | — |
 
 ### Core Features
-- **Self-service signup** — Stripe checkout → set password → dashboard
-- **Unified auth** — Single login for admins and clients
-- **Document upload** — PDF & TXT with page counting and limits
+- **Free trial signup** — No credit card, 7-day trial with upgrade anytime
+- **Stripe billing** — Checkout, subscriptions, prorated upgrades, cancel/resubscribe
+- **Billing portal** — Stripe-hosted portal for invoices, payment method updates
+- **Unified auth** — Single login for admins and clients, 24h session expiry
+- **Document upload** — PDF & TXT with page counting and plan-based limits
 - **File management** — Upload, replace (same filename), delete
 - **Custom branding** — Bot name, welcome message, primary color (Professional+)
 - **API access** — REST API with Bearer token auth (Enterprise)
-- **Embeddable widget** — `<script>` tag with branding support
-- **Prorated upgrades** — Stripe handles billing automatically
-- **Admin dashboard** — Client management, MRR tracking, multi-admin support
+- **Embeddable widget** — `<script>` tag with customizable color, title, position
+- **Admin dashboard** — Client management, MRR tracking, multi-admin with permissions
+- **Client reviews** — Submit & display reviews, real-time polling (30s, pauses when tab hidden)
 - **Forgot password** — Gmail SMTP password reset flow
+- **Mobile responsive** — All pages optimized for mobile (768px/480px breakpoints)
 
 ## Tech Stack
 
 - **Backend:** Python/Flask
 - **Database:** PostgreSQL (Render) / SQLite (local dev)
 - **AI:** Groq (llama-3.1-8b-instant) + TF-IDF retrieval
-- **Payments:** Stripe (subscriptions, webhooks, proration)
-- **Email:** Gmail SMTP (password resets)
+- **Payments:** Stripe (subscriptions, webhooks, proration, customer portal)
+- **Email:** Gmail SMTP (password resets, welcome emails)
 - **Hosting:** Render (auto-deploy from GitHub)
 
 ## Quick Start (Local)
@@ -85,8 +89,10 @@ course-qa-agent/
 ├── templates/
 │   ├── landing.html    # Public pricing page
 │   ├── login.html      # Unified login
-│   ├── dashboard.html  # Role-based dashboard
+│   ├── signup.html     # Free trial registration
+│   ├── dashboard.html  # Role-based dashboard (admin + client)
 │   ├── index.html      # Chat page (with branding)
+│   ├── embed.html      # Widget embed instructions
 │   ├── set_password.html
 │   ├── forgot_password.html
 │   └── reset_password.html
@@ -116,8 +122,8 @@ Endpoint: `/webhook/stripe`
 Required events:
 - `checkout.session.completed` — New signup or upgrade
 - `customer.subscription.deleted` — Cancellation
-- `invoice.payment_failed` — Mark as past due
 - `customer.subscription.updated` — Plan changes
+- `invoice.payment_failed` — Mark as past due
 
 ## Deployment (Render)
 
