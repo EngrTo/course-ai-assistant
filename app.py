@@ -1017,7 +1017,7 @@ def upgrade_plan():
     if not new_plan or new_plan not in PLAN_PRICES:
         return jsonify({"error": "Invalid plan"}), 400
 
-    plan_order = {"starter": 1, "professional": 2, "enterprise": 3}
+    plan_order = {"trial": 0, "starter": 1, "professional": 2, "enterprise": 3}
     if plan_order.get(new_plan, 0) <= plan_order.get(client["plan"], 0):
         return jsonify({"error": "You can only upgrade to a higher plan."}), 400
 

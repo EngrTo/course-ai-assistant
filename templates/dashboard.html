@@ -312,7 +312,12 @@
             {% if daily_queries_used is defined %}
             <p style="font-size:13px;color:#666;margin-top:4px;">Queries today: {{ daily_queries_used }}/10</p>
             {% endif %}
-            <button class="btn btn-primary" style="margin-top:12px;" onclick="subscribePlan('starter')">🚀 Subscribe Now — From $97/mo</button>
+            <p style="font-size:13px;color:#555;margin-top:12px;margin-bottom:8px;">🚀 Ready to upgrade? Choose a plan:</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="upgradePlan('starter')">Starter — $97/mo</button>
+                <button class="btn btn-primary" style="background:#4338ca;" onclick="upgradePlan('professional')">Professional — $197/mo</button>
+                <button class="btn btn-primary" style="background:#7c3aed;" onclick="upgradePlan('enterprise')">Enterprise — $497/mo</button>
+            </div>
         </div>
         {% endif %}
 
