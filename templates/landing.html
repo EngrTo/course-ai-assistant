@@ -244,7 +244,7 @@
         if (subscribedPlan) {
             const buttons = document.querySelectorAll('.plan-btn');
             const plans = ['starter', 'professional', 'enterprise'];
-            const planOrder = {'starter': 1, 'professional': 2, 'enterprise': 3};
+            const planOrder = {'trial': 0, 'starter': 1, 'professional': 2, 'enterprise': 3};
             buttons.forEach((btn, i) => {
                 if (plans[i] === subscribedPlan) {
                     btn.textContent = '✓ Current Plan';
@@ -253,7 +253,7 @@
                     btn.style.cursor = 'default';
                     btn.onclick = null;
                 } else if (planOrder[plans[i]] > planOrder[subscribedPlan]) {
-                    btn.textContent = 'Upgrade';
+                    btn.textContent = subscribedPlan === 'trial' ? 'Subscribe' : 'Upgrade';
                     btn.onclick = () => upgradePlan(plans[i]);
                 } else {
                     btn.style.display = 'none';
