@@ -1316,17 +1316,26 @@ def stripe_webhook():
                 print(f"⬆ Upgraded {client_id} to {new_plan}")
         else:
             # New signup flow
-            client = create_client(
-                sess.get("customer_email", ""),
-                metadata.get("business_name", "Business"),
-                metadata.get("plan", "starter"),
-                sess["id"]
-            )
-            update_client(client["client_id"], {
+            email = sess.get("customer_email", "")
+            existing = get_client_by_email(email) if email else None
+
+            if existing:
+                client_id = existing["client_id"]
+                print(f"✓ Existing client found for webhook: {client_id}")
+            else:
+                client = create_client(
+                    email,
+                    metadata.get("business_name", "Business"),
+                    metadata.get("plan", "starter"),
+                    sess["id"]
+                )
+                client_id = client["client_id"]
+                print(f"✓ New client: {client_id}")
+
+            update_client(client_id, {
                 "stripe_customer_id": stripe_customer_id,
                 "stripe_subscription_id": stripe_subscription_id,
             })
-            print(f"✓ New client: {client['client_id']}")
 
     elif event["type"] == "customer.subscription.deleted":
         sub = event["data"]["object"]
